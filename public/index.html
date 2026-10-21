@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FPS 2D - Protocolo Sombra</title>
+<link rel="stylesheet" href="/css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230a1a10'/><circle cx='16' cy='16' r='7' fill='none' stroke='%235fd38a' stroke-width='2'/><rect x='15' y='2' width='2' height='10' fill='%23ffffff'/></svg>">
+</head>
+<body>
+
+<!-- ================= TELA DE LOADING ================= -->
+<div id="boot" class="overlay boot">
+  <div class="boot-inner">
+    <div class="logo">
+      <span class="logo-mark">FPS<span class="logo-2">2D</span></span>
+      <span class="logo-sub">PROTOCOLO SOMBRA</span>
+    </div>
+    <div class="bar"><i id="bootbar"></i></div>
+    <p class="boot-txt" id="boottxt">CARREGANDO...</p>
+  </div>
+</div>
+
+<!-- ================= MENU PRINCIPAL ================= -->
+<div id="menu" class="overlay screen hidden">
+  <header class="menu-top">
+    <div class="brand">
+      <span class="brand-mark">FPS<span>2D</span></span>
+      <span class="brand-sub">PROTOCOLO SOMBRA</span>
+    </div>
+    <div class="user-box" id="userBox"></div>
+    <button class="theme-toggle" id="btnTheme" title="Alternar tema claro/escuro">
+      <span class="ico" id="themeIco">&#9789;</span><span id="themeTxt">ESCURO</span>
+    </button>
+  </header>
+
+  <nav class="menu-nav">
+    <button class="nav-btn active" data-tab="inicio"><b>INICIO</b><small>Escolha de modo</small></button>
+    <button class="nav-btn" data-tab="historia"><b>HISTORIA</b><small>Campanha</small></button>
+    <button class="nav-btn" data-tab="online"><b>ONLINE</b><small>Multijogador</small></button>
+    <button class="nav-btn" data-tab="ranking"><b>RANKING</b><small>Jogadores</small></button>
+    <button class="nav-btn" data-tab="conta"><b>CONTA</b><small>Login / Cadastro</small></button>
+  </nav>
+
+  <main class="menu-body">
+    <!-- INICIO -->
+    <section class="tab active" id="tab-inicio">
+      <div class="hero">
+        <div class="hero-text">
+          <h1>PROTOCOLO<span>SOMBRA</span></h1>
+          <p>FPS em 2D com raycasting. Campanha solo contra o Grupo Sombra e partidas online
+            no estilo CS2, com salas, compra de armas e rounds.</p>
+          <div class="hero-actions">
+            <button class="btn btn-primary" data-go="historia">INICIAR CAMPANHA</button>
+            <button class="btn btn-ghost" data-go="online">JOGAR ONLINE</button>
+          </div>
+          <div class="keys">
+            <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> mover</div>
+            <div><kbd>MOUSE</kbd> mirar</div>
+            <div><kbd>CLIQUE</kbd> atirar</div>
+            <div><kbd>R</kbd> recarregar</div>
+            <div><kbd>CTRL</kbd> agachar</div>
+            <div><kbd>SHIFT</kbd> andar devagar</div>
+            <div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd> trocar arma</div>
+            <div><kbd>ESC</kbd> pausar</div>
+          </div>
+        </div>
+        <div class="hero-art" id="heroArt"></div>
+      </div>
+    </section>
+
+    <!-- HISTORIA -->
+    <section class="tab" id="tab-historia">
+      <div class="panel-head">
+        <h2>CAMPANHA</h2>
+        <div class="stars-total" id="starsTotal">0 / 15</div>
+      </div>
+      <p class="hint">Missões desbloqueadas em sequência. Crie uma conta para salvar seu progresso.</p>
+      <div class="mission-list" id="missionList"></div>
+    </section>
+
+    <!-- ONLINE -->
+    <section class="tab" id="tab-online">
+      <div class="panel-head">
+        <h2>MULTIJOGADOR</h2>
+        <div class="mode-switch" id="modeSwitch">
+          <button class="ms-btn active" data-mode="tdm">Acove de Equipe</button>
+          <button class="ms-btn" data-mode="dm">Free-for-All</button>
+          <button class="ms-btn" data-mode="bomb">Competitivo</button>
+        </div>
+      </div>
+      <div id="onlineLocked" class="locked-panel hidden">
+        <h3>CONTA OBRIGATORIA</h3>
+        <p>O modo online exige uma conta válida com e-mail e senha forte.
+           Crie sua conta ou entre para liberar as salas.</p>
+        <button class="btn btn-primary" data-go="conta">IR PARA LOGIN</button>
+      </div>
+      <div id="onlineContent" class="hidden">
+        <div class="online-grid">
+          <div class="card">
+            <h3>CRIAR SALA</h3>
+            <label>Nome da sala<input type="text" id="roomName" maxlength="24" placeholder="Minha sala"></label>
+            <label>Mapa
+              <select id="roomMap">
+                <option value="de_verde">Verde</option>
+                <option value="de_fabrica">Fabrica</option>
+                <option value="de_caverna">Caverna</option>
+                <option value="de_ceu">Ceu</option>
+              </select>
+            </label>
+            <button class="btn btn-primary full" id="btnCreateRoom">CRIAR SALA</button>
+          </div>
+          <div class="card">
+            <h3>ENTRAR COM CODIGO</h3>
+            <label>Codigo da sala<input type="text" id="roomCode" maxlength="5" placeholder="ABCDE"></label>
+            <button class="btn btn-ghost full" id="btnJoinRoom">ENTRAR NA SALA</button>
+            <h3 class="mt">SALA DE JOGO ATUAL</h3>
+            <div class="room-list" id="roomList"><p class="muted">Nenhuma sala aberta.</p></div>
+          </div>
+        </div>
+        <div class="mode-desc" id="modeDesc"></div>
+      </div>
+    </section>
+
+    <!-- RANKING -->
+    <section class="tab" id="tab-ranking">
+      <div class="panel-head"><h2>RANKING GLOBAL</h2></div>
+      <div class="table-wrap"><table class="rank-table" id="rankTable"></table></div>
+    </section>
+
+    <!-- CONTA -->
+    <section class="tab" id="tab-conta">
+      <div class="panel-head"><h2>CONTA</h2></div>
+      <div class="auth-grid">
+        <div class="card" id="loginCard">
+          <h3>ENTRAR</h3>
+          <label>E-mail<input type="email" id="loginEmail" placeholder="voce@email.com" autocomplete="email"></label>
+          <label>Senha<input type="password" id="loginPass" placeholder="minimo 6 digitos" autocomplete="current-password"></label>
+          <button class="btn btn-primary full" id="btnLogin">ENTRAR</button>
+          <p class="form-msg" id="loginMsg"></p>
+        </div>
+        <div class="card" id="registerCard">
+          <h3>CRIAR CONTA</h3>
+          <label>E-mail valido<input type="email" id="regEmail" placeholder="voce@email.com" autocomplete="email"></label>
+          <label>Senha
+            <input type="password" id="regPass" placeholder="minimo 6 digitos" autocomplete="new-password">
+            <span class="strength"><i id="strBar"></i></span>
+            <span class="strength-txt" id="strTxt">Use 6+ digitos, maiuscula, minuscula e numero</span>
+          </label>
+          <label>Nome de jogador<input type="text" id="regName" maxlength="16" placeholder="Operador"></label>
+          <button class="btn btn-primary full" id="btnRegister">CRIAR CONTA</button>
+          <p class="form-msg" id="regMsg"></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="menu-foot">
+    <span>FPS 2D &mdash; Protocolo Sombra</span>
+    <span class="muted">WASD mover &middot; Mouse mirar &middot; Clique atirar &middot; R recarregar &middot; Ctrl agachar</span>
+  </footer>
+</div>
+
+<!-- ================= BRIEFING / CINEMATICA ================= -->
+<div id="briefing" class="overlay screen hidden">
+  <div class="brief-wrap">
+    <div class="brief-tag" id="briefAct">ATO I</div>
+    <h1 id="briefName">MISSAO</h1>
+    <div class="brief-meta" id="briefMeta"></div>
+    <p class="brief-text" id="briefText"></p>
+    <div class="brief-obj"><b>OBJETIVO:</b> <span id="briefObj"></span></div>
+    <div class="cine" id="cine"></div>
+    <div class="brief-actions">
+      <button class="btn btn-ghost" id="btnBriefBack">VOLTAR</button>
+      <button class="btn btn-primary" id="btnBriefStart">INICIAR MISSAO</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= HUD ================= -->
+<div id="hud" class="hud hidden">
+  <canvas id="game"></canvas>
+
+  <div class="hud-top">
+    <div class="hud-score" id="hudScore"></div>
+    <div class="hud-timer" id="hudTimer">0:00</div>
+    <div class="hud-score right" id="hudScore2"></div>
+  </div>
+
+  <div class="hud-left">
+    <div class="hud-box" id="hudObjective"></div>
+    <div class="hud-box" id="hudKillfeed"></div>
+  </div>
+
+  <div class="hud-bottom">
+    <div class="hud-health">
+      <div class="hp-row"><span class="hp-label">VIDA</span><i class="hp-bar"><b id="hpFill"></b></i><span id="hpVal">100</span></div>
+      <div class="hp-row"><span class="hp-label">COLETE</span><i class="ar-bar"><b id="arFill"></b></i><span id="arVal">0</span></div>
+    </div>
+    <div class="hud-money" id="hudMoney">$800</div>
+    <div class="hud-ammo">
+      <div class="weapon-name" id="hudWeapon">PISTOLA</div>
+      <div class="ammo-count"><span id="ammoMag">12</span><small>/</small><span id="ammoRes">24</span></div>
+      <div class="slots" id="hudSlots"></div>
+    </div>
+  </div>
+
+  <div class="hud-radar"><canvas id="radar" width="220" height="220"></canvas></div>
+  <div class="hud-buy hidden" id="buyMenu"></div>
+  <div class="hud-msg" id="hudMsg"></div>
+</div>
+
+<!-- ================= PAUSA ================= -->
+<div id="pause" class="overlay screen hidden">
+  <div class="pause-wrap">
+    <h2>PAUSADO</h2>
+    <button class="btn btn-primary" id="btnResume">CONTINUAR</button>
+    <button class="btn btn-ghost" id="btnQuit">SAIR PARA O MENU</button>
+    <button class="theme-toggle" id="btnTheme2" style="margin: 16px auto 0; display: flex;">
+      <span class="ico" id="themeIco2">&#9789;</span><span id="themeTxt2">ESCURO</span>
+    </button>
+    <div class="pause-keys">
+      <div><kbd>WASD</kbd> mover</div><div><kbd>MOUSE</kbd> mirar</div>
+      <div><kbd>CLIQUE</kbd> atirar</div><div><kbd>R</kbd> recarregar</div>
+      <div><kbd>CTRL</kbd> agachar</div><div><kbd>SHIFT</kbd> andar devagar</div>
+      <div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd> trocar arma</div>
+      <div><kbd>B</kbd> loja (online)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= FIM DE MISSAO / RESULTADO ================= -->
+<div id="result" class="overlay screen hidden">
+  <div class="result-wrap">
+    <h2 id="resTitle">MISSAO CONCLUIDA</h2>
+    <div class="res-stars" id="resStars"></div>
+    <div class="res-stats" id="resStats"></div>
+    <div class="brief-actions">
+      <button class="btn btn-ghost" id="btnResMenu">MENU</button>
+      <button class="btn btn-primary" id="btnResNext">PROXIMA MISSAO</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>

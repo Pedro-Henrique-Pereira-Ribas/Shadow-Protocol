@@ -1,0 +1,22 @@
+{
+  "name": "fps2d",
+  "version": "1.0.0",
+  "description": "FPS 2D - Protocolo Sombra: Modo Historia (estilo COD) + Modo Online (estilo CS2)",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --import ./test/register.mjs test/gameplay.js && node --import ./test/register.mjs test/client.js && node test/integration.js && node test/multiplayer.js",
+    "test:game": "node --import ./test/register.mjs test/gameplay.js",
+    "test:client": "node --import ./test/register.mjs test/client.js",
+    "test:api": "node test/integration.js",
+    "test:mp": "node test/multiplayer.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
