@@ -1,6 +1,4 @@
-# FPS 2D — Shadow Protocol (Protocolo Sombra)
-
-> *Shadow Protocol é um FPS inspirado em Counter-Strike 2 e Call of Duty, com modos história e competitivo, focado em ação e estratégia.*
+# FPS 2D — Protocolo Sombra
 
 Jogo de **FPS 2D com raycasting** (estilo Wolfenstein/Doom) rodando no navegador, com:
 
@@ -126,6 +124,7 @@ npm test
 
 | Suíte | O que verifica |
 |---|---|
+| `test/boot.js` | Monta o DOM real do `index.html` e executa o `boot()` de verdade (menu, missões, briefing, tema) |
 | `test/gameplay.js` | Simula as 5 missões com um bot (headless) e garante que são concluíveis |
 | `test/client.js` | Carrega todos os módulos do cliente, renderiza frames e mede desempenho |
 | `test/integration.js` | Cadastro/login, validações de e-mail e senha, bloqueio sem conta, API |

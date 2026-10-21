@@ -101,7 +101,10 @@ function goTab(name) {
 }
 
 function wireUI() {
-  $$('.nav-btn').forEach((b) => (b.onclick = () => goTab(b.dataset.tab)));
+  $$('.nav-btn').forEach((b) => (b.onclick = () => {
+    goTab(b.dataset.tab);
+    if (b.dataset.tab === 'ranking') loadLeaderboard();
+  }));
   $$('[data-go]').forEach((b) => (b.onclick = () => goTab(b.dataset.go)));
 
   // --- tema claro/escuro ---
@@ -238,6 +241,34 @@ async function doLogin() {
     msg.className = 'form-msg err';
     msg.textContent = e.message;
   }
+}
+
+async function loadLeaderboard() {
+  try {
+    const r = await api.leaderboard('global');
+    renderLeaderboard(r.leaderboard || []);
+  } catch {
+    renderLeaderboard([]);
+  }
+}
+
+function renderLeaderboard(list) {
+  const table = $('#rankTable');
+  if (!table) return;
+  const rows = list.length
+    ? list.map((r, i) => `
+      <tr>
+        <td class="num${i === 0 ? ' gold' : ''}">${i + 1}</td>
+        <td>${escapeHtml(r.username)}</td>
+        <td class="num">${r.kills || 0}</td>
+        <td class="num">${r.deaths || 0}</td>
+        <td class="num">${r.wins || 0}</td>
+        <td class="num">${r.score || 0}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" class="muted" style="padding:22px;text-align:center">Nenhum jogador no ranking ainda.</td></tr>';
+  table.innerHTML = `
+    <thead><tr><th>#</th><th>JOGADOR</th><th>ABATES</th><th>MORTES</th><th>VITORIAS</th><th>PONTOS</th></tr></thead>
+    <tbody>${rows}</tbody>`;
 }
 
 // ---------------- Historia ----------------
@@ -550,6 +581,9 @@ function loop(ts) {
   const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0.016);
   lastTs = ts;
 
+  // ainda inicializando (tela de loading)
+  if (!input) return;
+
   if (currentGame && !paused) {
     try {
       currentGame.update(dt, input);
@@ -579,10 +613,11 @@ function startHeroArt() {
   const draw = () => {
     heroRaf = requestAnimationFrame(draw);
     t += 0.016;
-    const w = box.clientWidth, h = box.clientHeight;
-    if (cv.width !== w * devicePixelRatio) {
-      cv.width = w * devicePixelRatio; cv.height = h * devicePixelRatio;
-      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    const dpr = window.devicePixelRatio || 1;
+    const w = box.clientWidth || 600, h = box.clientHeight || 340;
+    if (cv.width !== Math.round(w * dpr)) {
+      cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
     ctx.clearRect(0, 0, w, h);
 
