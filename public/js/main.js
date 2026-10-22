@@ -3,17 +3,19 @@ import { api } from './api.js';
 import { $, $$, show, toast, escapeHtml, fmtTime, formatMoney, clamp } from './util.js';
 import { AudioEngine } from './audio.js';
 import { Input } from './input.js';
+import { TouchControls } from './touch.js';
 import { Renderer } from './render.js';
 import { Hud } from './hud.js';
 import { StoryGame } from './story.js';
 import { OnlineGame } from './online.js';
 import { getMap } from '/shared/mapdefs.js';
+import { cellToWorld } from '/shared/maps.js';
 import { STORY_MISSIONS, getMission, nextMission, totalStars } from '/shared/story.js';
 import { MODES, WEAPONS } from '/shared/constants.js';
 import { applyTheme, getStoredTheme, toggleTheme, updateThemeButtons } from './theme.js';
 
 const audio = new AudioEngine();
-let renderer = null, input = null, hud = null;
+let renderer = null, input = null, hud = null, touch = null;
 let currentGame = null;
 let paused = false;
 let lastTs = 0;
@@ -48,6 +50,12 @@ async function boot() {
   renderer = new Renderer($('#game'), theme);
   input = new Input($('#game'));
   hud = new Hud();
+  // controles de toque (celular/tablet)
+  touch = new TouchControls(input, document.body, () => {
+    if (currentGame) togglePause(!paused);
+  });
+  touch.show(input.isTouch);
+  document.getElementById('hud')?.classList.toggle('touch', input.isTouch);
   wireUI();
 
   try {
@@ -392,8 +400,9 @@ function startStoryGame(map, mission) {
 
   // setup do jogador
   const spawn = map.spawns.T[0];
-  game.player.x = spawn.x * 64 + 32;
-  game.player.y = spawn.y * 64 + 32;
+  const sw = cellToWorld(spawn.x, spawn.y);
+  game.player.x = sw.x;
+  game.player.y = sw.y;
   game.player.armor = 0;
 
   enterGame(game, 'story');
@@ -546,6 +555,7 @@ function enterGame(game, mode) {
   show($('#hud'), true);
   hud.show(true);
   hud.renderKillfeed([]);
+  touch?.show(!!input?.isTouch);
   lastTs = performance.now();
   audio.resume();
   setTimeout(() => input.requestLock(), 60);
@@ -570,6 +580,7 @@ function quitToMenu() {
   show($('#hud'), false);
   show($('#menu'), true);
   hud.show(false);
+  touch?.show(false);
   input.exitLock();
   loadStory();
   refreshRooms();

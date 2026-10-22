@@ -35,6 +35,29 @@ Variáveis de ambiente opcionais:
 
 ---
 
+## No celular (mobile)
+
+O jogo detecta automaticamente telas de toque e troca o mouse/teclado por controles
+na tela — **não precisa instalar nada**:
+
+| Controle | Ação |
+|---|---|
+| Joystick virtual (canto inferior esquerdo) | Mover (o knob aparece onde você tocar) |
+| Arrastar na metade direita da tela | Olhar (girar a câmera) |
+| Botão **FOGO** | Atirar (segure para tiro automático) |
+| Botão **RECARGA** | Recarregar |
+| Botão **AGACHAR** | Alternar agachamento |
+| Botão **ARMA** | Trocar de arma |
+| Botão **PAUSA** | Abrir/fechar a pausa |
+
+O HUD fica compacto em telas pequenas, o zoom por toque é bloqueado e a resolução
+de renderização é reduzida automaticamente para manter o FPS.
+
+> O **modo online exige uma conta** — e o mesmo vale no celular.
+> Acesse pelo celular com o IP da máquina na rede local (ex.: `http://192.168.0.10:3000`).
+
+---
+
 ## Controles
 
 | Tecla | Ação |
@@ -114,6 +137,17 @@ Raycasting DDA por colunas com texturas procedurais (sem arquivos de imagem),
 sprites billboard desenhados por vetores, cobertura baixa que pode ser mirada por cima
 quando em pé e protege quando agachado, neblina por distância e iluminação de tema.
 
+**Escala do mundo:** 1 unidade = 1 metro, célula do grid = 2 m, parede = 3 m,
+olho a 1,6 m (0,95 m agachado). A projeção usa uma câmera pinhole com distância focal
+`f = (largura/2) / tan(FOV/2)`, então um inimigo a 25 m tem ~62 px de altura — legível.
+
+### Navegação da IA
+
+A IA usa um **campo de fluxo** (BFS compartilhado, recalculado a cada 0,3 s) para
+contornar paredes até o jogador, combinado com `hasLineOfSight` para escolher entre
+ataque direto e perseguição. Sem isso os hostis travavam em quinas e a missão
+ficava impossível de terminar.
+
 ---
 
 ## Testes
@@ -129,6 +163,7 @@ npm test
 | `test/client.js` | Carrega todos os módulos do cliente, renderiza frames e mede desempenho |
 | `test/integration.js` | Cadastro/login, validações de e-mail e senha, bloqueio sem conta, API |
 | `test/multiplayer.js` | Dois jogadores na mesma sala: dano real, movimento e bloqueio de teleporte |
+| `test/client.js` | Módulos do cliente, renderização, **visibilidade dos personagens** e controles touch |
 
 ---
 

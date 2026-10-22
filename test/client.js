@@ -75,15 +75,69 @@ function makeCanvas() {
   const cv = {
     width: 300, height: 150, style: {},
     classList: { add() {}, remove() {}, toggle() {} },
+    addEventListener() {}, removeEventListener() {},
+    setPointerCapture() {}, releasePointerCapture() {},
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 150 }),
   };
   const ctx = makeCtx(cv);
   cv.getContext = () => ctx;
   return cv;
 }
 
+// Elemento generico (suporta innerHTML com ids, como a UI touch)
+function makeEl(tag = 'div') {
+  const classes = new Set();
+  const el = {
+    tagName: String(tag).toUpperCase(),
+    style: {},
+    dataset: {},
+    children: [],
+    innerHTML: '',
+    textContent: '',
+    _listeners: {},
+    _ids: new Map(),
+    classList: {
+      add: (...c) => c.forEach((x) => classes.add(x)),
+      remove: (...c) => c.forEach((x) => classes.delete(x)),
+      toggle: (c, on) => {
+        if (on === undefined) on = !classes.has(c);
+        on ? classes.add(c) : classes.delete(c);
+        return on;
+      },
+      contains: (c) => classes.has(c),
+    },
+    addEventListener(t, f) { (this._listeners[t] ||= []).push(f); },
+    removeEventListener() {},
+    dispatchEvent(e) { for (const f of this._listeners[e.type] || []) f(e); },
+    appendChild(c) { this.children.push(c); return c; },
+    setPointerCapture() {},
+    releasePointerCapture() {},
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 132, height: 132, right: 132, bottom: 132 }),
+    querySelector(sel) {
+      if (sel.startsWith('#')) return this._ids.get(sel.slice(1)) || null;
+      return null;
+    },
+    querySelectorAll: () => [],
+    getContext: () => makeCtx({ width: 300, height: 150 }),
+  };
+  Object.defineProperty(el, 'innerHTML', {
+    get() { return el._html || ''; },
+    set(v) {
+      el._html = String(v);
+      el._ids = new Map();
+      for (const m of el._html.matchAll(/id="([^"]+)"/g)) {
+        const child = makeEl('div');
+        child.id = m[1];
+        el._ids.set(m[1], child);
+      }
+    },
+  });
+  return el;
+}
+
 const stubEls = new Map();
 globalThis.document = {
-  createElement: (tag) => (tag === 'canvas' ? makeCanvas() : { style: {}, classList: { add() {}, remove() {}, toggle() {} }, appendChild() {} }),
+  createElement: (tag) => (tag === 'canvas' ? makeCanvas() : makeEl(tag)),
   getElementById: (id) => {
     if (id === 'radar') {
       const cv = makeCanvas(); cv.width = 220; cv.height = 220;
@@ -109,6 +163,11 @@ globalThis.window = {
   addEventListener() {}, devicePixelRatio: 1, innerWidth: 1280, innerHeight: 720,
   matchMedia: () => ({ matches: false }),
 };
+try {
+  Object.defineProperty(globalThis, 'navigator', {
+    value: { maxTouchPoints: 0, userAgent: 'node-test' }, configurable: true, writable: true,
+  });
+} catch { /* ja existe */ }
 globalThis.location = { protocol: 'http:', host: 'localhost:3000' };
 globalThis.localStorage = {
   _d: new Map(),
@@ -137,6 +196,7 @@ console.log('\n=== RENDERIZACAO ===');
 const { Renderer } = await import('../public/js/render.js');
 const { StoryGame } = await import('../public/js/story.js');
 const { getMap } = await import('../shared/mapdefs.js');
+const { cellToWorld } = await import('../shared/maps.js');
 
 const canvas = makeCanvas();
 const r = new Renderer(canvas, 'dark');
@@ -144,8 +204,9 @@ ok(r.w > 0 && r.h > 0, `canvas ${r.w}x${r.h}`);
 
 const map = getMap('st_aldeia');
 const game = new StoryGame(map, 'm1', {});
-game.player.x = map.spawns.T[0].x * 64 + 32;
-game.player.y = map.spawns.T[0].y * 64 + 32;
+const spawn = cellToWorld(map.spawns.T[0].x, map.spawns.T[0].y);
+game.player.x = spawn.x;
+game.player.y = spawn.y;
 game.enemies = [];
 
 try {
@@ -173,12 +234,48 @@ try {
 // sprites
 try {
   const { Enemy } = await import('../public/js/ai.js');
-  game.enemies = [new Enemy(map, 'soldador', game.player.x + 300, game.player.y)];
+  game.enemies = [new Enemy(map, 'soldador', game.player.x + 3, game.player.y)];
   r.setTheme('dark');
   r.render(game, 0.016);
   ok(true, 'renderiza com sprites (inimigos)');
 } catch (e) {
   ok(false, `sprites -> ${e.message}`);
+}
+
+console.log('\n=== VISIBILIDADE DOS PERSONAGENS (bug reportado) ===');
+{
+  const { Enemy } = await import('../public/js/ai.js');
+  const { cellToWorld } = await import('../shared/maps.js');
+  const g2 = new StoryGame(map, 'm1', {});
+  const sp = cellToWorld(map.spawns.T[0].x, map.spawns.T[0].y);
+  g2.player.x = sp.x; g2.player.y = sp.y;
+  g2.player.angle = 0;
+
+  const dists = [3, 8, 15, 25, 40];
+  for (const d of dists) {
+    const e = new Enemy(map, 'soldador', g2.player.x + d, g2.player.y);
+    e.alive = true;
+    g2.enemies = [e];
+    const sprites = g2.collectSprites();
+    const s = sprites[0];
+    const focal = (r.w / 2) / 0.72;
+    const px = s ? (s.h * focal / d) : 0;
+    const visivel = px >= 12;
+    ok(visivel, `inimigo a ${d}m -> ${px.toFixed(0)}px de altura ${visivel ? '(visivel)' : '(INVISIVEL)'}`);
+  }
+  // inimigo atras da camera nao deve aparecer na tela
+  g2.enemies = [new Enemy(map, 'soldador', g2.player.x - 20, g2.player.y)];
+  g2.player.angle = 0;
+  const FOV_PLANE = 0.72;
+  const dirX = Math.cos(g2.player.angle), dirY = Math.sin(g2.player.angle);
+  const planeX = -dirY * FOV_PLANE, planeY = dirX * FOV_PLANE;
+  const relX = g2.enemies[0].x - g2.player.x, relY = g2.enemies[0].y - g2.player.y;
+  const invDet = 1 / (planeX * dirY - dirX * planeY);
+  const tX = invDet * (dirY * relX - dirX * relY);
+  const tY = invDet * (-planeY * relX + planeX * relY);
+  const sx = (r.w / 2) * (1 + tX / tY);
+  ok(tY <= 8 || sx < 0 || sx > r.w,
+    `inimigo atras da camera fica fora da tela (tY=${tY.toFixed(1)}, sx=${sx.toFixed(0)})`);
 }
 
 console.log('\n=== HUD ===');
@@ -189,6 +286,62 @@ try {
   ok(true, 'radar desenhado sem erros');
 } catch (e) {
   ok(false, `hud -> ${e.message}`);
+}
+
+console.log('\n=== CONTROLES TOUCH (mobile) ===');
+{
+  const { Input } = await import('../public/js/input.js');
+  const { TouchControls } = await import('../public/js/touch.js');
+
+  const input = new Input(makeCanvas());
+  ok(true, 'Input criado');
+
+  // joystick virtual
+  input.setTouchAxis(0.5, -0.5);
+  const ax = input.axis();
+  ok(Math.abs(ax.x - 0.5) < 0.01 && Math.abs(ax.y + 0.5) < 0.01,
+    `joystick vetor: x=${ax.x.toFixed(2)} y=${ax.y.toFixed(2)}`);
+
+  // andar para frente (y negativo = frente)
+  input.setTouchAxis(0, -1);
+  ok(input.axis().y === -1, 'joystick para frente move para frente');
+
+  // olhar por arrasto
+  input.addTouchLook(120);
+  ok(input.consumeMouse() === 120, 'arrasto gira a camera');
+  ok(input.consumeMouse() === 0, 'arrasto consumido uma unica vez');
+
+  // botao de tiro
+  input.setTouchFire(true);
+  ok(input.fireHeld === true, 'botao de tiro marcado como pressionado');
+  ok(input.fireClicked === true, 'primeiro toque de tiro gera disparo unico');
+  input.endFrame();
+  ok(input.fireClicked === false, 'disparo unico limpa no fim do frame');
+  ok(input.fireHeld === true, 'tiro continua pressionado enquanto segurado');
+  input.setTouchFire(false);
+  ok(input.fireHeld === false, 'soltar o botao para o tiro');
+
+  // acoes de toque (recarregar, agachar, trocar arma)
+  input.touchPress('KeyR');
+  ok(input.hit('KeyR') === true, 'botao RECARGA dispara KeyR');
+  input.setTouchCrouch(true);
+  ok(input.touch.crouch === true, 'botao AGACHAR alterna o agachamento');
+
+  // teclado e touch convivem
+  input.keys.add('KeyW');
+  const both = input.axis();
+  ok(both.y < -0.5, `teclado + joystick combinam (y=${both.y.toFixed(2)})`);
+
+  // interface touch
+  const host = makeEl('div');
+  let pauseCalled = false;
+  const tc = new TouchControls(input, host, () => { pauseCalled = true; });
+  ok(!!tc.el && !!tc.joy && !!tc.fireBtn && !!tc.reloadBtn && !!tc.crouchBtn
+    && !!tc.swapBtn && !!tc.pauseBtn, 'interface touch completa (joystick, tiro, recarrega, agachar, arma, pausa)');
+  tc.show(true);
+  ok(!tc.el.classList.contains('hidden'), 'controles touch podem ser exibidos');
+  tc.show(false);
+  ok(tc.el.classList.contains('hidden'), 'controles touch podem ser ocultados');
 }
 
 console.log('\nCONCLUIDO\n');

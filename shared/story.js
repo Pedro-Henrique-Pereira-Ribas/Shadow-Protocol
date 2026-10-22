@@ -3,28 +3,28 @@
 
 export const ENEMY_TYPES = {
   guarda: {
-    id: 'guarda', name: 'Guarda', hp: 60, speed: 105, weapon: 'pistola',
-    accuracy: 0.42, reaction: 0.55, range: 620, damage: 12, sightRange: 560, score: 100,
+    id: 'guarda', name: 'Guarda', hp: 60, speed: 2.4, weapon: 'pistola',
+    accuracy: 0.42, reaction: 0.55, range: 22, damage: 12, sightRange: 20, score: 100,
   },
   soldador: {
-    id: 'soldador', name: 'Soldado', hp: 100, speed: 125, weapon: 'smg',
-    accuracy: 0.55, reaction: 0.4, range: 780, damage: 16, sightRange: 700, score: 150,
+    id: 'soldador', name: 'Soldado', hp: 100, speed: 3.0, weapon: 'smg',
+    accuracy: 0.55, reaction: 0.4, range: 26, damage: 16, sightRange: 26, score: 150,
   },
   assaltante: {
-    id: 'assaltante', name: 'Assaltante', hp: 85, speed: 205, weapon: 'smg',
-    accuracy: 0.62, reaction: 0.22, range: 640, damage: 14, sightRange: 720, score: 200,
+    id: 'assaltante', name: 'Assaltante', hp: 85, speed: 4.8, weapon: 'smg',
+    accuracy: 0.62, reaction: 0.22, range: 22, damage: 14, sightRange: 28, score: 200,
   },
   atirador: {
-    id: 'atirador', name: 'Atirador', hp: 75, speed: 95, weapon: 'sniper',
-    accuracy: 0.8, reaction: 0.85, range: 1900, damage: 55, sightRange: 1500, score: 250,
+    id: 'atirador', name: 'Atirador', hp: 75, speed: 2.2, weapon: 'sniper',
+    accuracy: 0.8, reaction: 0.85, range: 60, damage: 55, sightRange: 55, score: 250,
   },
   colosso: {
-    id: 'colosso', name: 'Blindado', hp: 230, speed: 85, weapon: 'pesado',
-    accuracy: 0.5, reaction: 0.5, range: 900, damage: 22, sightRange: 800, score: 400, armor: 100,
+    id: 'colosso', name: 'Blindado', hp: 230, speed: 2.0, weapon: 'pesado',
+    accuracy: 0.5, reaction: 0.5, range: 28, damage: 22, sightRange: 30, score: 400, armor: 100,
   },
   comandante: {
-    id: 'comandante', name: 'Comandante Varga', hp: 520, speed: 135, weapon: 'pesado',
-    accuracy: 0.68, reaction: 0.3, range: 1200, damage: 26, sightRange: 1100, score: 1500,
+    id: 'comandante', name: 'Comandante Varga', hp: 520, speed: 3.2, weapon: 'pesado',
+    accuracy: 0.68, reaction: 0.3, range: 40, damage: 26, sightRange: 40, score: 1500,
     boss: true, armor: 100,
   },
 };

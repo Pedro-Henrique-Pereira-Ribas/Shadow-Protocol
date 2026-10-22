@@ -5,7 +5,7 @@ import {
   WEAPONS, EQUIP, MODES, TICK_RATE, SNAPSHOT_RATE, WEAPON_ORDER,
 } from '../shared/constants.js';
 import { getMap } from '../shared/mapdefs.js';
-import { collides, moveCircle, raycast, TILE, lowBlocksFor } from '../shared/maps.js';
+import { collides, moveCircle, raycast, TILE, lowBlocksFor, randomFloorPoints } from '../shared/maps.js';
 import { addMatchResult } from './db.js';
 
 const BUY_TIME = 15000;
@@ -87,7 +87,8 @@ function balanceTeams(room) {
     // FFA: times alternados apenas para diferenciacao visual/radar
     let i = 0;
     for (const p of room.players.values()) {
-      if (!p.team) p.team = i++ % 2 === 0 ? 'T' : 'CT';
+      if (!p.team) p.team = (i % 2 === 0) ? 'T' : 'CT';
+      i++;
     }
     return;
   }
@@ -159,11 +160,24 @@ export function resetPlayerLoadout(p, full = true) {
 
 // ---------------- Spawn ----------------
 function spawnPlayer(room, p) {
-  const team = p.team || (room.mode === 'dm' ? 'CT' : 'T');
-  const pts = room.map.spawns[team] || room.map.spawns.T;
-  const pt = pts[Math.floor(Math.random() * pts.length)];
-  p.x = pt.x * CELL + CELL / 2;
-  p.y = pt.y * CELL + CELL / 2;
+  const mode = MODES[room.mode];
+  let wx, wy;
+  if (!mode.teams) {
+    // FFA: distribuido pelo mapa inteiro (coordenadas de mundo)
+    if (!room.spawnPool || !room.spawnPool.length) {
+      room.spawnPool = randomFloorPoints(room.map, 26);
+    }
+    const pool = room.spawnPool.length ? room.spawnPool : room.map.spawns.T;
+    const pt = pool[Math.floor(Math.random() * pool.length)];
+    wx = pt.x; wy = pt.y;
+  } else {
+    // por equipe: indices de celula do grid
+    const pts = room.map.spawns[p.team || 'T'] || room.map.spawns.T;
+    const pt = pts[Math.floor(Math.random() * pts.length)];
+    wx = pt.x * CELL + CELL / 2;
+    wy = pt.y * CELL + CELL / 2;
+  }
+  p.x = wx; p.y = wy;
   p.angle = Math.atan2(
     (room.map.h * CELL / 2) - p.y,
     (room.map.w * CELL / 2) - p.x,
@@ -404,7 +418,7 @@ function handleShoot(room, p, msg) {
     const proj = vx * dirX + vy * dirY;
     if (proj <= 0 || proj > targetDist) continue;
     const perp = Math.abs(vx * dirY - vy * dirX);
-    if (perp > PLAYER_RADIUS + 6) continue;
+    if (perp > PLAYER_RADIUS + 0.35) continue;
     target = other;
     targetDist = proj;
     targetHead = Math.random() < (other.crouched ? 0.22 : 0.08);
@@ -425,7 +439,7 @@ function handleShoot(room, p, msg) {
       const proj = vx * dx + vy * dy;
       if (proj <= 0 || proj > dist) continue;
       const perp = Math.abs(vx * dy - vy * dx);
-      if (perp > PLAYER_RADIUS + 5) continue;
+      if (perp > PLAYER_RADIUS + 0.3) continue;
       hitPlayer = other; dist = proj;
       head = Math.random() < (other.crouched ? 0.24 : 0.09);
     }
@@ -457,7 +471,7 @@ function handlePos(room, p, msg) {
   if (!Number.isFinite(nx) || !Number.isFinite(ny)) return;
   const dx = nx - p.x, dy = ny - p.y;
   const d = Math.hypot(dx, dy);
-  const maxStep = RUN_SPEED * dt * 1.9 + 16;
+  const maxStep = RUN_SPEED * dt * 2.2 + 1.2;
   let tx = p.x, ty = p.y;
   if (d <= maxStep) { tx = nx; ty = ny; }
   else { const k = maxStep / (d || 1); tx = p.x + dx * k; ty = p.y + dy * k; }
@@ -490,7 +504,7 @@ function handleDefuse(room, p) {
   if (room.mode !== 'bomb' || room.bomb.state !== 'planted') return;
   if (!p.alive || p.team !== 'CT') return;
   const bx = room.bomb.x, by = room.bomb.y;
-  if (Math.hypot(p.x - bx, p.y - by) > 60) return;
+  if (Math.hypot(p.x - bx, p.y - by) > 2.5) return;
   if (!p.hasKit) {
     room.bomb.defuser = p.id;
     room.bomb.defuseProgress += 1 / (DEFUSE_TIME / 1000);

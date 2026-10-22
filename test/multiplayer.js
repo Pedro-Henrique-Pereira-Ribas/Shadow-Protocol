@@ -57,19 +57,68 @@ ok(A.snaps > 0 && B.snaps > 0, `snapshots recebidos (A=${A.snaps} B=${B.snaps})`
 ok(!!A.pos && !!B.pos, `posicoes: A=${JSON.stringify(A.pos)} B=${JSON.stringify(B.pos)}`);
 
 if (A.pos && B.pos) {
-  // A mira em B e atira algumas vezes
-  for (let i = 0; i < 14; i++) {
-    const ang = Math.atan2(B.pos.y - A.pos.y, B.pos.x - A.pos.x);
-    A.ws.send(JSON.stringify({ t: 'shoot', a: ang }));
-    await new Promise((r2) => setTimeout(r2, 110));
+  const dist0 = Math.hypot(A.pos.x - B.pos.x, A.pos.y - B.pos.y);
+  ok(dist0 > 0.5, `jogadores em posicoes distintas (distancia=${dist0.toFixed(1)}m)`);
+
+  // aproxima os dois para uma distancia de combate (caminhando pelo campo de fluxo)
+  const { getMap } = await import('../shared/mapdefs.js');
+  const { cellToWorld, worldToCell, computeFlowField, flowStep, hasLineOfSight } = await import('../shared/maps.js');
+  const { CELL } = await import('../shared/constants.js');
+  const map = getMap('de_verde');
+  // usa o site A (sala aberta) para garantir linha de visao
+  const spot = cellToWorld(map.sites.A.x, map.sites.A.y);
+  const walkTo = async (st, tx, ty) => {
+    const field = computeFlowField(map, Math.floor(tx / CELL), Math.floor(ty / CELL));
+    for (let i = 0; i < 400; i++) {
+      const p = st.pos;
+      if (!p) break;
+      if (Math.hypot(tx - p.x, ty - p.y) < 0.8) break;
+      const c = worldToCell(p.x, p.y);
+      const step = flowStep(map, field, c.cx, c.cy);
+      let nx = tx, ny = ty;
+      if (step) { const wc = cellCenterOf(step); nx = wc.x; ny = wc.y; }
+      const dx = nx - p.x, dy = ny - p.y;
+      const dl = Math.hypot(dx, dy) || 1;
+      const s = Math.min(0.6, dl);
+      st.ws.send(JSON.stringify({ t: 'pos', x: p.x + (dx / dl) * s, y: p.y + (dy / dl) * s, a: 0 }));
+      await new Promise((r2) => setTimeout(r2, 30));
+    }
+  };
+  const cellCenterOf = (step) => cellToWorld(step.cx, step.cy);
+
+  await walkTo(A, spot.x, spot.y);
+  await walkTo(B, spot.x + 2.5, spot.y);
+  await new Promise((r2) => setTimeout(r2, 300));
+
+  // se ficaram sobrepostos, afasta B alguns metros (a sala do site e larga)
+  if (Math.hypot(A.pos.x - B.pos.x, A.pos.y - B.pos.y) < 2) {
+    for (let i = 0; i < 8; i++) {
+      B.ws.send(JSON.stringify({ t: 'pos', x: B.pos.x + 0.6, y: B.pos.y, a: 0 }));
+      await new Promise((r2) => setTimeout(r2, 60));
+    }
+    await new Promise((r2) => setTimeout(r2, 300));
   }
-  await new Promise((r2) => setTimeout(r2, 700));
-  ok(B.hits > 0, `B recebeu ${B.hits} acertos`);
-  ok((B.minHp ?? 100) < 100, `vida de B caiu para ${B.minHp} (minimo observado)`);
+
+  const dist = Math.hypot(A.pos.x - B.pos.x, A.pos.y - B.pos.y);
+  ok(dist > 0.5 && dist < 45, `distancia de combate: ${dist.toFixed(1)}m (pistola: 45m)`);
+  const los = hasLineOfSight(map, A.pos.x, A.pos.y, B.pos.x, B.pos.y, true);
+  ok(los, 'existe linha de visao entre os dois jogadores');
+
+  if (dist > 0.5 && los) {
+    // A mira em B e atira algumas vezes
+    for (let i = 0; i < 14; i++) {
+      const ang = Math.atan2(B.pos.y - A.pos.y, B.pos.x - A.pos.x);
+      A.ws.send(JSON.stringify({ t: 'shoot', a: ang }));
+      await new Promise((r2) => setTimeout(r2, 110));
+    }
+    await new Promise((r2) => setTimeout(r2, 700));
+    ok(B.hits > 0, `B recebeu ${B.hits} acertos`);
+    ok((B.minHp ?? 100) < 100, `vida de B caiu para ${B.minHp} (minimo observado)`);
+  }
 
   // movimento: B anda e o servidor valida
   const before = { ...B.pos };
-  B.ws.send(JSON.stringify({ t: 'pos', x: before.x + 120, y: before.y, a: 0 }));
+  B.ws.send(JSON.stringify({ t: 'pos', x: before.x + 1, y: before.y, a: 0 }));
   await new Promise((r2) => setTimeout(r2, 400));
   ok(true, `posicao atualizada de B: ${JSON.stringify(B.pos)}`);
 

@@ -327,3 +327,51 @@ export function randomFloorPoints(map, count, r = rng(7)) {
   }
   return pts;
 }
+
+// ---------------- Campo de fluxo (BFS) ----------------
+// Distancia em celulas de cada ponto do mapa ate o alvo.
+// Usado pela IA para contornar paredes (estilo RTS).
+const FLOW_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+
+export function computeFlowField(map, tx, ty) {
+  const n = map.w * map.h;
+  const dist = new Int16Array(n).fill(-1);
+  if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return dist;
+  if (isSolid(map, tx, ty)) return dist;
+  const q = new Int32Array(n);
+  let head = 0, tail = 0;
+  const start = ty * map.w + tx;
+  dist[start] = 0;
+  q[tail++] = start;
+  while (head < tail) {
+    const cur = q[head++];
+    const cx = cur % map.w;
+    const cy = (cur / map.w) | 0;
+    const d = dist[cur];
+    for (const [dx, dy] of FLOW_DIRS) {
+      const nx = cx + dx, ny = cy + dy;
+      if (nx < 0 || ny < 0 || nx >= map.w || ny >= map.h) continue;
+      if (isSolid(map, nx, ny)) continue;
+      // nao cortar quinas
+      if (dx && dy && (isSolid(map, cx + dx, cy) || isSolid(map, cx, cy + dy))) continue;
+      const ni = ny * map.w + nx;
+      if (dist[ni] !== -1) continue;
+      dist[ni] = d + 1;
+      q[tail++] = ni;
+    }
+  }
+  return dist;
+}
+
+// Proxima celula do caminho (vizinha com menor distancia no campo de fluxo)
+export function flowStep(map, field, cx, cy) {
+  if (!field) return null;
+  let best = null, bestD = Infinity;
+  for (const [dx, dy] of FLOW_DIRS) {
+    const nx = cx + dx, ny = cy + dy;
+    if (nx < 0 || ny < 0 || nx >= map.w || ny >= map.h) continue;
+    const d = field[ny * map.w + nx];
+    if (d >= 0 && d < bestD) { bestD = d; best = { cx: nx, cy: ny, d }; }
+  }
+  return best;
+}

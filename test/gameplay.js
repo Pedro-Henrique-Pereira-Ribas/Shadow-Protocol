@@ -1,5 +1,6 @@
 // Teste headless da logica de jogo (Modo Historia) com entrada simulada.
 import { getMap } from '../shared/mapdefs.js';
+import { cellToWorld, hasLineOfSight } from '../shared/maps.js';
 import { STORY_MISSIONS } from '../shared/story.js';
 import { ENEMY_TYPES } from '../shared/story.js';
 
@@ -41,7 +42,10 @@ class FakeInput {
     this.mouseClicked = false;
     this.mx = 0;
     this.ax = 0; this.ay = 0;
+    this.touch = { axis: { x: 0, y: 0 }, lookDX: 0, fire: false, fireClicked: false, crouch: false, pressed: new Set() };
   }
+  get fireHeld() { return this.mouseDown || this.touch.fire; }
+  get fireClicked() { return this.mouseClicked || this.touch.fireClicked; }
   down(c) { return this.keys.has(c); }
   hit(c) { const v = this.pressed.has(c); this.pressed.delete(c); return v; }
   axis() { return { x: this.ax, y: this.ay }; }
@@ -59,8 +63,9 @@ for (const mission of STORY_MISSIONS) {
   const game = new StoryGame(map, mission.id, {
     onMissionEnd: (res) => { ended = res; },
   });
-  game.player.x = map.spawns.T[0].x * 64 + 32;
-  game.player.y = map.spawns.T[0].y * 64 + 32;
+  const spawn = cellToWorld(map.spawns.T[0].x, map.spawns.T[0].y);
+  game.player.x = spawn.x;
+  game.player.y = spawn.y;
 
   const dt = 1 / 60;
   let frames = 0;
@@ -83,7 +88,7 @@ for (const mission of STORY_MISSIONS) {
     let bestSlot = p.slotIndex, bestAmmo = -1;
     p.slots.forEach((w, i) => {
       const tot = (p.ammo[w] || 0) + (p.reserve[w] || 0) * 0.3;
-      if (tot > bestAmmo) { bestAmmo = tot; bestSlot = i; }
+      if (tot >= bestAmmo) { bestAmmo = tot; bestSlot = i; }
     });
     if (bestSlot !== p.slotIndex) p.selectSlot(bestSlot);
 
@@ -94,6 +99,7 @@ for (const mission of STORY_MISSIONS) {
 
     // mira no inimigo mais proximo
     let best = null, bestD = Infinity;
+    let visible = false;
     for (const e of game.enemies) {
       if (!e.alive) continue;
       const d = Math.hypot(e.x - p.x, e.y - p.y);
@@ -103,7 +109,7 @@ for (const mission of STORY_MISSIONS) {
     // desliza em paredes quando fica travado
     if (frames % 12 === 0) {
       const moved = Math.hypot(p.x - lastPos.x, p.y - lastPos.y);
-      if (moved < 6) { stuckFrames++; } else { stuckFrames = 0; }
+      if (moved < 0.2) { stuckFrames++; } else { stuckFrames = 0; }
       lastPos = { x: p.x, y: p.y };
       if (stuckFrames > 2) { detour = 40; detourDir = Math.random() < 0.5 ? 1 : -1; stuckFrames = 0; }
     }
@@ -132,27 +138,30 @@ for (const mission of STORY_MISSIONS) {
       input.ay = -Math.cos(rel) * 0.9;
       input.ax = Math.sin(rel) * 0.3;
       if (detour > 0) { input.ax = detourDir * 1; input.ay = 0; }
-      if (bestD < 900 && best) { input.mouseDown = true; input.mouseClicked = true; }
+      if (bestD < 38 && best) { input.mouseDown = true; input.mouseClicked = true; }
     } else if (best) {
       const want = Math.atan2(best.y - p.y, best.x - p.x);
       let diff = want - p.angle;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
       p.angle += diff * 0.4;
+      // so atira com linha de visao livre
+      visible = hasLineOfSight(map, p.x, p.y, best.x, best.y, true);
       // avanca se longe, recua se colado (eixo local: ay negativo = frente)
-      const ideal = 420;
+      // distancias em metros
+      const ideal = 14;
       const rel = want - p.angle;
       const fwd = Math.cos(rel), side = Math.sin(rel);
       if (bestD > ideal) {
         input.ay = -fwd * 0.9;
         input.ax = side * 0.4;
-      } else if (bestD < 180) {
+      } else if (bestD < 5) {
         input.ay = fwd * 0.7;
         input.ax = -side * 0.4;
       } else { input.ax = 0; input.ay = 0; }
       if (detour > 0) { input.ax = detourDir * 1; input.ay = 0; }
-      if (bestD < 900) { input.mouseDown = true; input.mouseClicked = true; }
-    } else { input.ax = 0; input.ay = 0; }
+      if (bestD < 38 && visible) { input.mouseDown = true; input.mouseClicked = true; }
+    } else { input.ax = 0; input.ay = 0; visible = false; }
 
     game.update(dt, input);
     input.endFrame();

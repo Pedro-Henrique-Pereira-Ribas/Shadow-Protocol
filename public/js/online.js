@@ -246,7 +246,7 @@ export class OnlineGame extends Game {
   // ---------------- loop ----------------
   update(dt, input) {
     const p = this.player;
-    p.crouched = input.down('ControlLeft') || input.down('ControlRight') || input.down('KeyC');
+    p.crouched = input.down('ControlLeft') || input.down('ControlRight') || input.down('KeyC') || input.touch?.crouch;
     p.walking = input.down('ShiftLeft') || input.down('ShiftRight');
     p.update(dt, input, this);
 
@@ -262,7 +262,7 @@ export class OnlineGame extends Game {
     // tiro
     const wpn = p.weaponDef;
     if (wpn && wpn.mag) {
-      const wantFire = wpn.auto ? input.mouseDown : input.mouseClicked;
+      const wantFire = wpn.auto ? input.fireHeld : input.fireClicked;
       if (wantFire && p.canFire()) {
         p.consumeShot();
         this.send({ t: 'shoot', a: p.angle });

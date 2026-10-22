@@ -19,7 +19,7 @@ export class Hud {
     };
     this.rctx = this.el.radar.getContext('2d');
     this.msgTimer = 0;
-    this.radarZoom = 5;
+    this.radarZoom = 3;          // pixels por metro
   }
 
   show(on) { this.el.root.classList.toggle('hidden', !on); }
@@ -128,10 +128,11 @@ export class Hud {
         const rx = wx * Math.cos(rot) - wy * Math.sin(rot);
         const ry = wx * Math.sin(rot) + wy * Math.cos(rot);
         const sx = cx + rx * scale, sy = cy + ry * scale;
+        const cellPx = scale * CELL;
         ctx.fillStyle = t === TILE.LOW
           ? (light ? '#7fb894' : '#2f8f4e')
           : (light ? '#2f7a4a' : '#1c5c33');
-        ctx.fillRect(sx - scale / 2, sy - scale / 2, scale, scale);
+        ctx.fillRect(sx - cellPx / 2, sy - cellPx / 2, cellPx, cellPx);
       }
     }
 

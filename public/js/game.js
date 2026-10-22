@@ -142,7 +142,7 @@ export class LocalPlayer {
     const step = Math.hypot(realDx, realDy);
     this.stepDist += step;
     this.bob += step * 0.06;
-    if (this.stepDist > 46) { this.stepDist = 0; game.onStep?.(); }
+    if (this.stepDist > 1.5) { this.stepDist = 0; game.onStep?.(); }
 
     // recarregamento
     if (this.reloading && this.reloadTimer <= 0) {
@@ -209,7 +209,7 @@ export class Game {
       const proj = vx * dirX + vy * dirY;
       if (proj <= 0 || proj > bestDist) continue;
       const perp = Math.abs(vx * dirY - vy * dirX);
-      if (perp > PLAYER_RADIUS + 8) continue;
+      if (perp > PLAYER_RADIUS + 0.45) continue;
       best = e; bestDist = proj;
       bestHead = perp < PLAYER_RADIUS * 0.42;
     }
@@ -243,7 +243,7 @@ export class Game {
     this.crosshairSpread = base + (moving / RUN_SPEED) * 0.5 + (p.crouched ? -0.06 : 0);
     for (const it of this.items) {
       if (it.taken) continue;
-      if (Math.hypot(it.x - p.x, it.y - p.y) < 34) {
+      if (Math.hypot(it.x - p.x, it.y - p.y) < 1.6) {
         it.taken = true;
         this.onPickup?.(it);
       }

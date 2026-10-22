@@ -1,6 +1,6 @@
 // Renderizador raycasting 2D (estilo Wolfenstein/Doom) em Canvas 2D.
-import { CELL, C, EYE_STAND, EYE_CROUCH } from '/shared/constants.js';
-import { TILE, tileAt } from '/shared/maps.js';
+import { CELL, C, EYE_STAND, EYE_CROUCH, WALL_FULL } from '/shared/constants.js';
+import { TILE, TILE_HEIGHT, tileAt } from '/shared/maps.js';
 
 const TEX_SIZE = 64;
 const FOV_PLANE = 0.72;      // meio-angulo da projecao
@@ -171,12 +171,18 @@ export class Renderer {
   }
 
   resize() {
-    const maxW = 1600;
-    this.scale = Math.min(1, maxW / window.innerWidth);
-    this.w = Math.max(320, Math.floor(window.innerWidth * this.scale));
-    this.h = Math.max(240, Math.floor(window.innerHeight * this.scale));
+    // em telas de toque renderiza em resolucao moderada para manter o FPS
+    const isTouch = (navigator.maxTouchPoints || 0) > 0;
+    const dpr = Math.min(window.devicePixelRatio || 1, isTouch ? 1.5 : 1);
+    const maxW = isTouch ? 1100 : 1600;
+    const cssW = Math.max(1, window.innerWidth);
+    const cssH = Math.max(1, window.innerHeight);
+    this.w = Math.max(320, Math.min(maxW, Math.round(cssW * dpr)));
+    this.h = Math.max(240, Math.round(this.w * (cssH / cssW)));
     this.canvas.width = this.w;
     this.canvas.height = this.h;
+    // distancia focal da camera (projecao pinhole) em pixels
+    this.focal = (this.w / 2) / FOV_PLANE;
   }
 
   // ---------------- Rasterizacao principal ----------------
@@ -240,15 +246,15 @@ export class Renderer {
       }
       if (!hit) continue;
 
-      const wallH = tile === TILE.LOW ? 0.5 : 1.0;
-      const ppu = h / dist;                       // pixels por unidade de mundo
+      const wallH = TILE_HEIGHT[tile] || WALL_FULL;
+      const ppu = this.focal / dist;             // pixels por metro nesse ponto
       const drawStart = horizon + (eye - wallH) * ppu;
       const drawEnd = horizon + eye * ppu;
       const dh = drawEnd - drawStart;
       if (drawStart > h || drawEnd < 0) continue;
 
       // nivel de sombra por distancia + lado
-      const fog = Math.min(1, dist / (h * 1.15));
+      const fog = Math.min(1, dist / (this.focal * 1.6));
       let lvl = Math.floor((1 - fog) * (SHADES - 1));
       if (side === 1) lvl = Math.max(0, lvl - 1);
       const texArr = this.textures[tile] || this.textures[TILE.WALL];
@@ -273,8 +279,8 @@ export class Renderer {
         .sort((a, b) => b.d - a.d);
 
       for (const o of ordered) {
-        const ppu = h / o.tY;
-        const sH = (o.s.h || 1.8) * ppu;
+        const ppu = this.focal / o.tY;
+        const sH = (o.s.h || 1.75) * ppu;
         const sW = sH * (o.s.aspect || 0.55);
         const sx = (w / 2) * (1 + o.tX / o.tY);
         const bottomY = horizon + eye * ppu;

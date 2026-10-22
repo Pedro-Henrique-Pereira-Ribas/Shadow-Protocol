@@ -2,11 +2,11 @@
 import {
   CELL, PLAYER_RADIUS, MAX_HEALTH, WEAPONS, EYE_STAND,
 } from '/shared/constants.js';
-import { moveCircle, raycast, hasLineOfSight, lowBlocksFor } from '/shared/maps.js';
+import { moveCircle, raycast, hasLineOfSight, lowBlocksFor, flowStep, cellCenter, worldToCell } from '/shared/maps.js';
 import { ENEMY_TYPES } from '/shared/story.js';
 import { clamp, rand, angDiff } from './util.js';
 
-const PATROL_RADIUS = 190;
+const PATROL_RADIUS = 12;    // metros
 
 export class Enemy {
   constructor(map, typeId, x, y, opts = {}) {
@@ -31,6 +31,8 @@ export class Enemy {
     this.patrolTarget = null;
     this.strafeDir = Math.random() < 0.5 ? 1 : -1;
     this.stuckTimer = 0;
+    this.wallTimer = 0;
+    this.wallDir = 1;
     this.name = t.name;
     this.boss = !!t.boss;
     this.team = 'T';
@@ -97,28 +99,33 @@ export class Enemy {
     const freshContact = contact && (game.time - contact.t) < 8;
 
     if (this.state === 'patrol') {
-      if (freshContact) {
+      // usa o campo de fluxo para se aproximar do jogador contornando paredes
+      const step = flowStep(this.map, game.flow, ...Object.values(worldToCell(this.x, this.y)));
+      if (step) {
+        const c = cellCenter(step.cx, step.cy);
+        const dx = c.x - this.x, dy = c.y - this.y;
+        const dl = Math.hypot(dx, dy) || 1;
+        mx = dx / dl; my = dy / dl;
+        this.angle += angDiff(this.angle, Math.atan2(dy, dx)) * Math.min(1, dt * 5);
+      } else if (freshContact) {
         // indo ate o ultimo ponto conhecido
         const tx = contact.x - this.x, ty = contact.y - this.y;
         const l = Math.hypot(tx, ty) || 1;
         mx = tx / l; my = ty / l;
         this.angle += angDiff(this.angle, Math.atan2(ty, tx)) * Math.min(1, dt * 5);
       } else {
-        // CACADA: o esquadrao sabe mais ou menos onde esta o intruso
-        if (!this.huntTarget || game.time - this.huntTarget.t > 3.5) {
-          const off = rand(340);
-          const ang = rand(Math.PI * 2);
-          this.huntTarget = {
-            x: clamp(p.x + Math.cos(ang) * off, CELL, this.map.w * CELL - CELL),
-            y: clamp(p.y + Math.sin(ang) * off, CELL, this.map.h * CELL - CELL),
-            t: game.time,
+        if (!this.patrolTarget || Math.hypot(this.patrolTarget.x - this.x, this.patrolTarget.y - this.y) < 2) {
+          const a = rand(Math.PI * 2);
+          const r = rand(PATROL_RADIUS);
+          this.patrolTarget = {
+            x: clamp(this.homeX + Math.cos(a) * r, CELL, this.map.w * CELL - CELL),
+            y: clamp(this.homeY + Math.sin(a) * r, CELL, this.map.h * CELL - CELL),
           };
         }
-        const t = this.huntTarget;
-        const tx = t.x - this.x, ty = t.y - this.y;
+        const tx = this.patrolTarget.x - this.x, ty = this.patrolTarget.y - this.y;
         const l = Math.hypot(tx, ty) || 1;
         mx = tx / l; my = ty / l;
-        this.angle += angDiff(this.angle, Math.atan2(ty, tx)) * Math.min(1, dt * 4);
+        this.angle += angDiff(this.angle, Math.atan2(ty, tx)) * Math.min(1, dt * 3);
       }
       if (canSee && Math.abs(angDiff(this.angle, aimAngle)) > 2.4) {
         this.angle += angDiff(this.angle, aimAngle) * Math.min(1, dt * 3);
@@ -138,6 +145,18 @@ export class Enemy {
       my += (tx / l) * this.strafeDir * 0.7;
       if (Math.random() < dt * 0.5) this.strafeDir *= -1;
 
+      // sem linha de visao: usa o campo de fluxo para contornar paredes
+      if (!canSee) {
+        const step = flowStep(this.map, game.flow, ...Object.values(worldToCell(this.x, this.y)));
+        if (step) {
+          const c = cellCenter(step.cx, step.cy);
+          const dx = c.x - this.x, dy = c.y - this.y;
+          const dl = Math.hypot(dx, dy) || 1;
+          mx = (dx / dl) * 0.9;
+          my = (dy / dl) * 0.9;
+        }
+      }
+
       // mira suave
       const turn = angDiff(this.angle, aimAngle);
       this.angle += turn * Math.min(1, dt * (this.boss ? 6 : 8));
@@ -156,14 +175,23 @@ export class Enemy {
 
     // detecta travamento e desvia
     const realMove = Math.hypot(this.x - before.x, this.y - before.y);
-    if (ml > 0.1 && realMove < this.speed * dt * 0.25) {
+    if (ml > 0.1 && realMove < this.speed * dt * 0.3) {
       this.stuckTimer += dt;
-      if (this.stuckTimer > 0.35) {
-        this.strafeDir *= -1;
-        this.angle += this.strafeDir * 1.2;
+      if (this.stuckTimer > 0.3) {
+        // desliza ao longo da parede por um tempo (evita ficar preso em quinas)
+        this.wallTimer = 0.9 + Math.random() * 0.9;
+        this.wallDir = Math.random() < 0.5 ? 1 : -1;
         this.stuckTimer = 0;
       }
     } else this.stuckTimer = 0;
+
+    if (this.wallTimer > 0) {
+      this.wallTimer -= dt;
+      const px = -Math.sin(this.angle) * this.wallDir;
+      const py = Math.cos(this.angle) * this.wallDir;
+      mx = mx * 0.2 + px;
+      my = my * 0.2 + py;
+    }
 
     // --------- tiro ---------
     if ((this.state === 'chase' || this.state === 'attack') && canSee && this.cooldown <= 0) {
@@ -178,8 +206,8 @@ export class Enemy {
     const wpn = this.weapon;
     const aim = Math.atan2(p.y - this.y, p.x - this.x);
     // erro de mira cresce com a distancia e com o movimento do alvo
-    const moveErr = Math.hypot(p.vx, p.vy) / 260;
-    const err = (1 - this.type.accuracy) * (0.35 + dist / 1400) + moveErr * 0.22;
+    const moveErr = Math.hypot(p.vx, p.vy) / 5.6;
+    const err = (1 - this.type.accuracy) * (0.35 + dist / 60) + moveErr * 0.22;
     const shotAngle = aim + rand(err, -err);
 
     const dirX = Math.cos(shotAngle), dirY = Math.sin(shotAngle);
