@@ -7,8 +7,9 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "test": "node --import ./test/register.mjs test/boot.js && node --import ./test/register.mjs test/gameplay.js && node --import ./test/register.mjs test/client.js && node test/integration.js && node test/multiplayer.js",
+    "test": "node --import ./test/register.mjs test/boot.js && node --import ./test/register.mjs test/geometry.js && node --import ./test/register.mjs test/gameplay.js && node --import ./test/register.mjs test/client.js && node test/integration.js && node test/multiplayer.js",
     "test:boot": "node --import ./test/register.mjs test/boot.js",
+    "test:geometry": "node --import ./test/register.mjs test/geometry.js",
     "test:game": "node --import ./test/register.mjs test/gameplay.js",
     "test:client": "node --import ./test/register.mjs test/client.js",
     "test:api": "node test/integration.js",

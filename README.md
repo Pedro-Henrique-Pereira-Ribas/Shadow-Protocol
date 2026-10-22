@@ -148,8 +148,17 @@ Raycasting DDA por colunas com texturas procedurais (sem arquivos de imagem),
 sprites billboard desenhados por vetores, cobertura baixa que pode ser mirada por cima
 quando em pé e protege quando agachado, neblina por distância e iluminação de tema.
 
+**Para a parede ser fácil de localizar:**
+- **1 coluna por pixel** (no desktop) — cada pixel amostra o ponto exato do mundo,
+  sem borrão e sem a textura "escorregar" ao andar (`pixelStep = 2` no celular, por performance);
+- **texturas de 128×128** com topo claro e base escura, dando silhueta definida;
+- **linhas de profundidade no chão** (a cada 2 m, em perspectiva) — dão a referência
+  de movimento e distância que faz a parede "parar de escorregar" na tela;
+- **sombra de contato** na base de cada parede, ancorando-a no chão;
+- **arma na tela** (viewmodel) com balanço ao andar e recuo ao atirar.
+
 **Escala do mundo:** 1 unidade = 1 metro, célula do grid = 2 m, parede = 3 m,
-olho a 1,6 m (0,95 m agachado). A projeção usa uma câmera pinhole com distância focal
+olho a 1,5 m (0,9 m agachado). A projeção usa uma câmera pinhole com distância focal
 `f = (largura/2) / tan(FOV/2)`, então um inimigo a 25 m tem ~62 px de altura — legível.
 
 ### Navegação da IA
@@ -170,6 +179,7 @@ npm test
 | Suíte | O que verifica |
 |---|---|
 | `test/boot.js` | Monta o DOM real do `index.html` e executa o `boot()` de verdade (menu, missões, briefing, tema) |
+| `test/geometry.js` | **Geometria da cena**: a parede aparece na altura certa, não "escorrega" ao andar e o chão tem referência |
 | `test/gameplay.js` | Simula as 5 missões com um bot (headless) e garante que são concluíveis |
 | `test/client.js` | Carrega todos os módulos do cliente, renderiza frames e mede desempenho |
 | `test/integration.js` | Cadastro/login, validações de e-mail e senha, bloqueio sem conta, API |

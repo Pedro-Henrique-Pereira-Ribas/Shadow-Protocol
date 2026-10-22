@@ -2,7 +2,7 @@
 import { CELL, C, EYE_STAND, EYE_CROUCH, WALL_FULL } from '/shared/constants.js';
 import { TILE, TILE_HEIGHT, tileAt } from '/shared/maps.js';
 
-const TEX_SIZE = 64;
+const TEX_SIZE = 128;
 const FOV_PLANE = 0.72;      // meio-angulo da projecao
 const SHADES = 7;
 
@@ -26,6 +26,13 @@ function makeWallTexture(seed, base, accent) {
   g.fillStyle = base;
   g.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
 
+  // borda superior clara: da um topo definido a silhueta da parede
+  g.fillStyle = 'rgba(255,255,255,.16)';
+  g.fillRect(0, 0, TEX_SIZE, 4);
+  // base escura: ancora a parede no chao
+  g.fillStyle = 'rgba(0,0,0,.35)';
+  g.fillRect(0, TEX_SIZE - 5, TEX_SIZE, 5);
+
   // ruido
   const img = g.getImageData(0, 0, TEX_SIZE, TEX_SIZE);
   const d = img.data;
@@ -35,14 +42,14 @@ function makeWallTexture(seed, base, accent) {
   }
   g.putImageData(img, 0, 0);
 
-  // painel: faixas horizontais e verticais
+  // painel: faixas horizontais e verticais (proporcional ao tamanho)
   g.strokeStyle = accent;
   g.globalAlpha = 0.55;
   g.lineWidth = 2;
-  for (let y = 0; y < TEX_SIZE; y += 16) {
+  for (let y = 0; y < TEX_SIZE; y += TEX_SIZE / 4) {
     g.beginPath(); g.moveTo(0, y + 0.5); g.lineTo(TEX_SIZE, y + 0.5); g.stroke();
   }
-  for (let x = 0; x < TEX_SIZE; x += 32) {
+  for (let x = 0; x < TEX_SIZE; x += TEX_SIZE / 2) {
     g.beginPath(); g.moveTo(x + 0.5, 0); g.lineTo(x + 0.5, TEX_SIZE); g.stroke();
   }
   g.globalAlpha = 1;
@@ -50,7 +57,7 @@ function makeWallTexture(seed, base, accent) {
   // manchas
   g.globalAlpha = 0.14;
   g.fillStyle = '#000';
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < TEX_SIZE / 6; i++) {
     const w = 4 + r() * 18, h = 3 + r() * 12;
     g.fillRect(r() * TEX_SIZE, r() * TEX_SIZE, w, h);
   }
@@ -67,11 +74,11 @@ function makeCrateTexture(seed) {
   g.fillStyle = '#2b2015';
   g.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
   // tabuas
-  for (let y = 0; y < TEX_SIZE; y += 8) {
-    g.fillStyle = y % 16 === 0 ? '#3a2c1d' : '#2f2417';
-    g.fillRect(0, y, TEX_SIZE, 7);
+  for (let y = 0; y < TEX_SIZE; y += TEX_SIZE / 8) {
+    g.fillStyle = y % (TEX_SIZE / 4) === 0 ? '#3a2c1d' : '#2f2417';
+    g.fillRect(0, y, TEX_SIZE, TEX_SIZE / 8 - 1);
     g.fillStyle = 'rgba(0,0,0,.35)';
-    g.fillRect(0, y + 7, TEX_SIZE, 1);
+    g.fillRect(0, y + TEX_SIZE / 8 - 1, TEX_SIZE, 1);
   }
   // ferragens
   g.strokeStyle = '#5d6b5f';
@@ -81,7 +88,7 @@ function makeCrateTexture(seed) {
   g.beginPath(); g.moveTo(TEX_SIZE - 4, 4); g.lineTo(4, TEX_SIZE - 4); g.stroke();
   // granulado
   g.globalAlpha = 0.2;
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < TEX_SIZE * 1.5; i++) {
     g.fillStyle = r() > 0.5 ? '#000' : '#7a6a52';
     g.fillRect(r() * TEX_SIZE, r() * TEX_SIZE, 2, 2);
   }
@@ -124,6 +131,9 @@ const SCENES = {
     crosshair: 'rgba(79,217,138,.92)',
     dot: 'rgba(255,255,255,.9)',
     vignette: ['rgba(0,0,0,0)', 'rgba(0,0,0,.62)'],
+    contact: 'rgba(0,0,0,.55)',
+    floorLine: 'rgba(120,200,150,ALPHA)',
+    floorBand: 'rgba(140,220,170,ALPHA)',
     fog: 0,
     light: false,
   },
@@ -133,6 +143,9 @@ const SCENES = {
     crosshair: 'rgba(16,70,42,.92)',
     dot: 'rgba(16,40,26,.9)',
     vignette: ['rgba(20,40,28,0)', 'rgba(20,40,28,.26)'],
+    contact: 'rgba(20,40,28,.45)',
+    floorLine: 'rgba(40,90,55,ALPHA)',
+    floorBand: 'rgba(255,255,255,ALPHA)',
     fog: 1,
     light: true,
   },
@@ -152,9 +165,9 @@ export class Renderer {
   }
 
   buildTextures() {
-    const wall = makeWallTexture(11, '#1d3a26', '#0a1a10');
+    const wall = makeWallTexture(11, '#2b5238', '#0a1a10');
     const crate = makeCrateTexture(29);
-    const metal = makeWallTexture(47, '#26302b', '#0c1210');
+    const metal = makeWallTexture(47, '#33403a', '#0c1210');
     const light = SCENES[this.theme]?.light;
     this.textures = {
       [TILE.WALL]: Array.from({ length: SHADES }, (_, i) => shadeCanvas(wall, i, light)),
@@ -181,6 +194,8 @@ export class Renderer {
     this.h = Math.max(240, Math.round(this.w * (cssH / cssW)));
     this.canvas.width = this.w;
     this.canvas.height = this.h;
+    // colunas por pixel: 1 = nitido; 2 = mais leve (celular)
+    this.pixelStep = isTouch ? 2 : 1;
     // distancia focal da camera (projecao pinhole) em pixels
     this.focal = (this.w / 2) / FOV_PLANE;
   }
@@ -212,8 +227,31 @@ export class Renderer {
     ctx.fillStyle = floorGrad;
     ctx.fillRect(0, horizon, w, h - horizon);
 
+    // --------- linhas de profundidade no chao ---------
+    // dao referencia de movimento e distancia (sem elas a parede "escorrega")
+    const eyeH = eye;
+    const bandStep = 2;                       // metros
+    for (let d = 70; d >= bandStep; d -= bandStep) {
+      const sy = horizon + (this.focal * eyeH) / d;
+      if (sy > h) continue;                   // abaixo da tela
+      if (sy < 0) break;
+      const fade = Math.max(0, 1 - d / 70);
+      ctx.fillStyle = scene.floorLine.replace('ALPHA', (0.22 * fade).toFixed(3));
+      ctx.fillRect(0, sy, w, 1.2);
+      const nd = d - bandStep;
+      if (nd > 0) {
+        const nearer = horizon + (this.focal * eyeH) / nd;
+        if (nearer < h && nearer > sy) {
+          ctx.fillStyle = scene.floorBand.replace('ALPHA', (0.055 * fade).toFixed(3));
+          ctx.fillRect(0, sy, w, nearer - sy);
+        }
+      }
+    }
+
     // --------- paredes ---------
-    const cols = Math.max(1, Math.floor(w / 2));   // resolucao horizontal (2px por coluna)
+    // 1 coluna por pixel da tela: cada pixel amostra o ponto exato do
+    // mundo -> sem borrado e sem "textura escorregando" ao andar
+    const cols = Math.max(1, Math.floor(w / (this.pixelStep || 1)));
     const colW = w / cols;
     for (let i = 0; i < cols; i++) {
       const camX = 2 * (i + 0.5) / cols - 1;
@@ -256,14 +294,21 @@ export class Renderer {
       if (drawStart > h || drawEnd < 0) continue;
 
       // nivel de sombra por distancia + lado
-      const fog = Math.min(1, dist / (this.focal * 1.6));
+      const fog = Math.min(1, dist / (this.focal * 2.4));
       let lvl = Math.floor((1 - fog) * (SHADES - 1));
       if (side === 1) lvl = Math.max(0, lvl - 1);
       const texArr = this.textures[tile] || this.textures[TILE.WALL];
       const tex = texArr[Math.max(0, Math.min(SHADES - 1, lvl))];
 
       const texU = Math.floor(wallX * TEX_SIZE);
-      ctx.drawImage(tex, texU, 0, 1, TEX_SIZE, i * colW, drawStart, colW + 1, dh);
+      ctx.drawImage(tex, texU, 0, 1, TEX_SIZE, i * colW, drawStart, colW + 0.6, dh);
+
+      // sombra de contato na base da parede: deixa o limite com o chao nitido
+      const baseY = drawEnd;
+      if (baseY < h && baseY > 0) {
+        ctx.fillStyle = scene.contact;
+        ctx.fillRect(i * colW, baseY - 1.5, colW + 0.6, 1.5);
+      }
     }
 
     // --------- sprites ---------
@@ -334,9 +379,77 @@ export class Renderer {
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, w, h);
 
+    // --------- arma na mao (viewmodel) ---------
+    // desenhada por cima da vinheta para continuar nitida
+    this.drawViewmodel(ctx, w, h, game);
+
     // --------- mira ---------
     this.drawCrosshair(ctx, w, h, game);
     if (game.hitMarker > 0) this.drawHitMarker(ctx, w, h, game.hitMarker);
+  }
+
+  // ---------------- Arma na mao ----------------
+  // ancora visual do jogador: balanco ao andar, recuo ao atirar
+  drawViewmodel(ctx, w, h, game) {
+    const p = game.player;
+    const wpn = p.weaponDef;
+    if (!wpn || !wpn.mag) return;
+
+    const light = (SCENES[this.theme] || SCENES.dark).light;
+    const moving = Math.hypot(p.vx, p.vy);
+    const speedK = Math.min(1, moving / 5.6);
+
+    // balanco vertical/horizontal conforme anda
+    const bobY = Math.sin(p.bob * 2) * 7 * speedK;
+    const bobX = Math.cos(p.bob) * 5 * speedK;
+    // recuo ao atirar
+    const kick = Math.min(1, p.recoil || 0) * 26;
+    const kickRot = Math.min(1, p.recoil || 0) * 0.09;
+
+    const scale = w / 1280;
+    const long = ['fuzil', 'fuzil4', 'pesado', 'sniper', 'escopeta'].includes(p.weapon);
+    const gunLen = (long ? 300 : 170) * scale;
+    const gunH = (long ? 46 : 58) * scale;
+
+    const baseX = w * 0.60 + bobX;
+    const baseY = h + 26 * scale + bobY - kick;
+
+    ctx.save();
+    ctx.translate(baseX, baseY);
+    ctx.rotate(kickRot);
+    ctx.scale(scale, scale);
+
+    const metal = light ? '#3a4740' : '#161c18';
+    const metalLight = light ? '#66756b' : '#2b3730';
+    const accent = light ? '#1c5c33' : '#4fd98a';
+
+    // mao / punho
+    ctx.fillStyle = light ? '#b08a63' : '#7d6249';
+    ctx.fillRect(-38, -34, 52, 96);
+    ctx.fillRect(26, -52, 44, 78);
+
+    // corpo da arma
+    ctx.fillStyle = metal;
+    ctx.fillRect(-30, -96, gunLen / scale * 0.72, gunH);
+    ctx.fillStyle = metalLight;
+    ctx.fillRect(-30, -96, gunLen / scale * 0.72, 7);
+    // cano
+    ctx.fillStyle = metal;
+    ctx.fillRect(gunLen / scale * 0.42, -88, gunLen / scale * 0.6, 16);
+    // carregador
+    ctx.fillStyle = metal;
+    ctx.fillRect(18, -58, 34, 62);
+    // detalhes em verde (tema)
+    ctx.fillStyle = accent;
+    ctx.globalAlpha = 0.75;
+    ctx.fillRect(-22, -84, 54, 5);
+    ctx.fillRect(24, -50, 22, 5);
+    ctx.globalAlpha = 1;
+    // mira
+    ctx.fillStyle = metalLight;
+    ctx.fillRect(gunLen / scale * 0.5, -104, 42, 9);
+
+    ctx.restore();
   }
 
   // ---------------- Sprites ----------------
