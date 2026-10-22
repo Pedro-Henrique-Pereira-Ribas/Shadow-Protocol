@@ -153,8 +153,10 @@ quando em pé e protege quando agachado, neblina por distância e iluminação d
   sem borrão e sem a textura "escorregar" ao andar (`pixelStep = 2` no celular, por performance);
 - **texturas de 128×128** de baixa frequência (sem ruído por pixel) + **cadeia de mipmaps**
   (4 níveis) — paredes distantes usam a versão borrada, eliminando o chuvisco ao andar;
-- **linhas de profundidade no chão** (a cada 2 m, em perspectiva) — dão a referência
-  de movimento e distância que faz a parede "parar de escorregar" na tela;
+- **grade de chão projetada de verdade** — linhas do mundo (X e Y constantes) projetadas
+  na tela: dão a paralaxe lateral e frontal que faz o movimento ser legível;
+- **quinas destacadas** — linha vertical clara onde a face da parede muda, para ver
+  imediatamente onde o corredor vira;
 - **sombra de contato** na base de cada parede, ancorando-a no chão;
 - **arma na tela** (viewmodel) com balanço ao andar e recuo ao atirar.
 

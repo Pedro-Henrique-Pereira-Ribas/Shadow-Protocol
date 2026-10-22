@@ -6,7 +6,7 @@ import { cellToWorld, tileAt, TILE } from '../shared/maps.js';
 
 // stub de canvas que REGISTRA as chamadas
 function makeRecordingCanvas() {
-  const calls = { fillRect: [], drawImage: [] };
+  const calls = { fillRect: [], drawImage: [], path: [], strokes: 0 };
   const cv = {
     width: 1280, height: 720, style: {},
     classList: { add() {}, remove() {}, toggle() {} },
@@ -18,9 +18,12 @@ function makeRecordingCanvas() {
     fillRect(x, y, w, h) { calls.fillRect.push({ x, y, w, h, fill: this.fillStyle }); },
     clearRect() {},
     drawImage(...a) { calls.drawImage.push(a); },
+    moveTo(x, y) { calls.path.push({ x, y }); },
+    lineTo(x, y) { calls.path.push({ x, y }); },
+    stroke() { calls.strokes++; },
     fillText() {}, strokeText() {}, strokeRect() {},
-    beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, arc() {}, ellipse() {}, rect() {},
-    fill() {}, stroke() {}, clip() {}, save() {}, restore() {}, translate() {}, rotate() {},
+    beginPath() {}, closePath() {}, arc() {}, ellipse() {}, rect() {},
+    fill() {}, clip() {}, save() {}, restore() {}, translate() {}, rotate() {},
     scale() {}, setTransform() {}, measureText: () => ({ width: 10 }),
     createLinearGradient: () => ({ addColorStop() {} }),
     createRadialGradient: () => ({ addColorStop() {} }),
@@ -151,12 +154,49 @@ function wallInFront(cx, cy, dirX, dirY) {
   ok(wallSlices >= r.w * 0.5,
     `fatias de parede por frame: ${wallSlices} (tela ${r.w}px) -> sem borrado horizontal`);
 }
-// --- 4. linhas de profundidade no chao existem ---
+// --- 4. grade de referencia no chao existe e se move lateralmente ---
 {
-  canvas.__calls.fillRect.length = 0;
+  const gridAt = (px, py) => {
+    canvas.__calls.path.length = 0;
+    canvas.__calls.strokes = 0;
+    game.player.x = px; game.player.y = py;
+    game.player.angle = 0;
+    r.render(game, 0.016);
+    return { segs: canvas.__calls.path.length, strokes: canvas.__calls.strokes };
+  };
+  const g1 = gridAt(spot.x, spot.y);
+  ok(g1.strokes > 10, `grade do chao desenhada (${g1.strokes} trechos, ${g1.segs} pontos)`);
+
+  // ao andar de lado, a grade precisa mudar de posicao (paralaxe lateral)
+  canvas.__calls.path.length = 0;
   r.render(game, 0.016);
-  const wide = canvas.__calls.fillRect.filter((c) => c.w > r.w * 0.9 && c.h <= 2);
-  ok(wide.length >= 3, `linhas de referencia no chao: ${wide.length} (movimento perceptivel)`);
+  const ptsA = canvas.__calls.path.map((p) => Math.round(p.x)).join(',');
+  const g2 = gridAt(spot.x + 1, spot.y);
+  const ptsB = canvas.__calls.path.map((p) => Math.round(p.x)).join(',');
+  ok(ptsA !== ptsB, 'a grade do chao tem paralaxe lateral (referencia de movimento)');
+
+  // e ao virar, tambem
+  const g3 = gridAt(spot.x, spot.y);
+  game.player.angle = Math.PI / 2;
+  canvas.__calls.path.length = 0;
+  r.render(game, 0.016);
+  const ptsC = canvas.__calls.path.map((p) => Math.round(p.x)).join(',');
+  ok(ptsA !== ptsC, 'a grade do chao muda ao virar a camera');
+}
+
+// --- 5. quinas das paredes sao destacadas ---
+{
+  // procura um angulo em que ha uma quina visivel
+  let found = false;
+  for (let ang = 0; ang < Math.PI * 2 && !found; ang += 0.02) {
+    game.player.x = spot.x; game.player.y = spot.y;
+    game.player.angle = ang;
+    canvas.__calls.fillRect.length = 0;
+    r.render(game, 0.016);
+    const edges = canvas.__calls.fillRect.filter((c) => c.w <= 2 && c.w >= 1 && c.h > 60);
+    if (edges.length >= 1) found = true;
+  }
+  ok(found, 'quina da parede destacada com linha vertical (da para ver onde vira)');
 }
 
 console.log('\nCONCLUIDO\n');

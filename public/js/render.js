@@ -138,8 +138,8 @@ const SCENES = {
     dot: 'rgba(255,255,255,.9)',
     vignette: ['rgba(0,0,0,0)', 'rgba(0,0,0,.62)'],
     contact: 'rgba(0,0,0,.55)',
-    floorLine: 'rgba(120,200,150,ALPHA)',
-    floorBand: 'rgba(140,220,170,ALPHA)',
+    gridLine: 'rgba(120,200,150,.20)',
+    edge: 'rgba(190,235,205,.38)',
     fog: 0,
     light: false,
   },
@@ -150,8 +150,8 @@ const SCENES = {
     dot: 'rgba(16,40,26,.9)',
     vignette: ['rgba(20,40,28,0)', 'rgba(20,40,28,.26)'],
     contact: 'rgba(20,40,28,.45)',
-    floorLine: 'rgba(40,90,55,ALPHA)',
-    floorBand: 'rgba(255,255,255,ALPHA)',
+    gridLine: 'rgba(40,90,55,.24)',
+    edge: 'rgba(255,255,255,.55)',
     fog: 1,
     light: true,
   },
@@ -250,32 +250,17 @@ export class Renderer {
     ctx.fillStyle = floorGrad;
     ctx.fillRect(0, horizon, w, h - horizon);
 
-    // --------- linhas de profundidade no chao ---------
-    // dao referencia de movimento e distancia (sem elas a parede "escorrega")
-    const eyeH = eye;
-    const bandStep = 2;                       // metros
-    for (let d = 70; d >= bandStep; d -= bandStep) {
-      const sy = horizon + (this.focal * eyeH) / d;
-      if (sy > h) continue;                   // abaixo da tela
-      if (sy < 0) break;
-      const fade = Math.max(0, 1 - d / 70);
-      ctx.fillStyle = scene.floorLine.replace('ALPHA', (0.22 * fade).toFixed(3));
-      ctx.fillRect(0, sy, w, 1.2);
-      const nd = d - bandStep;
-      if (nd > 0) {
-        const nearer = horizon + (this.focal * eyeH) / nd;
-        if (nearer < h && nearer > sy) {
-          ctx.fillStyle = scene.floorBand.replace('ALPHA', (0.055 * fade).toFixed(3));
-          ctx.fillRect(0, sy, w, nearer - sy);
-        }
-      }
-    }
+    // --------- grade do chao projetada ---------
+    // da a referencia real de movimento (lateral e frontal) e deixa
+    // claro onde a parede vira - sem isso e preciso olhar o radar
+    this.drawFloorGrid(ctx, w, h, game, scene, horizon, eye);
 
     // --------- paredes ---------
     // 1 coluna por pixel da tela: cada pixel amostra o ponto exato do
     // mundo -> sem borrado e sem "textura escorregando" ao andar
     const cols = Math.max(1, Math.floor(w / (this.pixelStep || 1)));
     const colW = w / cols;
+    let prevSide = -1;
     for (let i = 0; i < cols; i++) {
       const camX = 2 * (i + 0.5) / cols - 1;
       let rdx = dirX + planeX * camX;
@@ -316,10 +301,10 @@ export class Renderer {
       const dh = drawEnd - drawStart;
       if (drawStart > h || drawEnd < 0) continue;
 
-      // nivel de sombra por distancia + lado
+      // nivel de sombra por distancia + lado (2 niveis no lado = cantos mais nitidos)
       const fog = Math.min(1, dist / (this.focal * 2.4));
       let lvl = Math.floor((1 - fog) * (SHADES - 1));
-      if (side === 1) lvl = Math.max(0, lvl - 1);
+      if (side === 1) lvl = Math.max(0, lvl - 2);
       const texArr = this.textures[tile] || this.textures[TILE.WALL];
       const shadeIdx = Math.max(0, Math.min(SHADES - 1, lvl));
 
@@ -336,6 +321,14 @@ export class Renderer {
         ctx.fillStyle = scene.contact;
         ctx.fillRect(i * colW, baseY - 1.5, colW + 0.6, 1.5);
       }
+
+      // quina (mudanca de face): linha vertical clara -> da para ver
+      // imediatamente onde a parede vira
+      if (prevSide !== -1 && prevSide !== side) {
+        ctx.fillStyle = scene.edge;
+        ctx.fillRect(i * colW - 0.75, drawStart, 1.5, dh);
+      }
+      prevSide = side;
     }
 
     // --------- sprites ---------
@@ -413,6 +406,59 @@ export class Renderer {
     // --------- mira ---------
     this.drawCrosshair(ctx, w, h, game);
     if (game.hitMarker > 0) this.drawHitMarker(ctx, w, h, game.hitMarker);
+  }
+
+  // ---------------- Grade do chao em perspectiva ----------------
+  // projeta linhas do mundo (x e y constantes) na tela: e a referencia
+  // que mostra o movimento lateral e onde as paredes viram
+  drawFloorGrid(ctx, w, h, game, scene, horizon, eyeH) {
+    const p = game.player;
+    const dirX = Math.cos(p.angle), dirY = Math.sin(p.angle);
+    const planeX = -dirY * FOV_PLANE, planeY = dirX * FOV_PLANE;
+    const invDet = 1 / (planeX * dirY - dirX * planeY);
+    const step = 2;                 // metros entre linhas
+    const maxD = 46;                // alcance da grade
+    const half = Math.ceil(maxD / step);
+
+    const project = (wx, wy) => {
+      const relX = wx - p.x, relY = wy - p.y;
+      const tX = invDet * (dirY * relX - dirX * relY);
+      const tY = invDet * (-planeY * relX + planeX * relY);
+      if (tY <= 0.06 || tY > maxD) return null;
+      const sx = (w / 2) * (1 + tX / tY);
+      const sy = horizon + (this.focal * eyeH) / tY;
+      if (sy < -40 || sy > h + 40) return null;
+      return { x: sx, y: sy, d: tY };
+    };
+
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = scene.gridLine;
+
+    // duas familias de linhas: X constante e Y constante
+    for (let family = 0; family < 2; family++) {
+      const base = family === 0 ? p.x : p.y;
+      const first = Math.round(base / step) * step;
+      for (let k = -half; k <= half; k++) {
+        const c = first + k * step;
+        // percorre a linha e desenha trechos visiveis
+        let prev = null;
+        ctx.beginPath();
+        for (let s = -maxD; s <= maxD; s += step / 2) {
+          const wx = family === 0 ? c : p.x + s;
+          const wy = family === 0 ? p.y + s : c;
+          const pt = project(wx, wy);
+          if (!pt) {
+            if (prev) { ctx.stroke(); ctx.beginPath(); prev = null; }
+            continue;
+          }
+          if (!prev) { ctx.moveTo(pt.x, pt.y); prev = pt; }
+          else { ctx.lineTo(pt.x, pt.y); prev = pt; }
+        }
+        if (prev) ctx.stroke();
+      }
+    }
+    ctx.restore();
   }
 
   // ---------------- Arma na mao ----------------
