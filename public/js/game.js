@@ -1,9 +1,10 @@
 // Nucleo do jogo: jogador local, movimento, armas e colisao.
 import {
   CELL, PLAYER_RADIUS, RUN_SPEED, WALK_SPEED, CROUCH_SPEED, MAX_HEALTH, MAX_ARMOR,
-  WEAPONS, EYE_STAND, EYE_CROUCH,
+  WEAPONS, EYE_STAND, EYE_CROUCH, PITCH_LIMIT, PITCH_SENSITIVITY,
+  ENEMY_HEIGHT, ENEMY_HEIGHT_CROUCH, HEADSHOT_ZONE,
 } from '/shared/constants.js';
-import { moveCircle, raycast, lowBlocksFor, TILE } from '/shared/maps.js';
+import { moveCircle, raycast, raycast3D, lowBlocksFor, TILE, shotHeightAt } from '/shared/maps.js';
 import { clamp, rand, randInt } from './util.js';
 
 export class LocalPlayer {
@@ -11,6 +12,7 @@ export class LocalPlayer {
     this.map = map;
     this.x = 0; this.y = 0;
     this.angle = 0;
+    this.pitch = 0;              // inclinacao vertical da mira (radianos)
     this.vx = 0; this.vy = 0;
     this.hp = MAX_HEALTH;
     this.armor = opts.armor || 0;
@@ -107,9 +109,11 @@ export class LocalPlayer {
       }
     }
 
-    // mira
+    // mira horizontal e vertical
     const dx = input.consumeMouse();
     if (dx) this.angle += dx * input.sensitivity;
+    const dy = input.consumeMouseY();
+    if (dy) this.pitch = clamp(this.pitch - dy * PITCH_SENSITIVITY, -PITCH_LIMIT, PITCH_LIMIT);
 
     // troca de arma
     const w = input.consumeWheel();
@@ -123,8 +127,9 @@ export class LocalPlayer {
 
     const fx = Math.cos(this.angle), fy = Math.sin(this.angle);
     const sx = -fy, sy = fx;
-    const mx = (ax.x * sx + ax.y * fx);
-    const my = (ax.x * sy + ax.y * fy);
+    // axis.y negativo = frente (W), axis.x positivo = direita (D)
+    const mx = (ax.x * sx - ax.y * fx);
+    const my = (ax.x * sy - ax.y * fy);
 
     const k = 1 - Math.exp(-14 * dt);
     this.vx += (mx * speed - this.vx) * k;
@@ -194,12 +199,14 @@ export class Game {
   }
 
   // ---------- helpers de tiro (historia) ----------
-  traceShot(angle, spreadMul = 1) {
+  traceShot(angle, spreadMul = 1, pitchOverride = null) {
     const p = this.player;
     const w = p.weaponDef;
     const dirX = Math.cos(angle), dirY = Math.sin(angle);
-    const lowBlocks = lowBlocksFor(p.crouched);
-    const wall = raycast(this.map, p.x, p.y, dirX, dirY, w.range, lowBlocks);
+    const pitch = pitchOverride === null ? (p.pitch || 0) : pitchOverride;
+    const eye = p.eye;
+    // parede considering a altura do tiro (pode passar por cima da cobertura baixa)
+    const wall = raycast3D(this.map, p.x, p.y, dirX, dirY, w.range, eye, pitch);
     let maxDist = wall.hit ? wall.dist : w.range;
 
     let best = null, bestDist = maxDist, bestHead = false;
@@ -210,8 +217,12 @@ export class Game {
       if (proj <= 0 || proj > bestDist) continue;
       const perp = Math.abs(vx * dirY - vy * dirX);
       if (perp > PLAYER_RADIUS + 0.45) continue;
+      // o tiro precisa estar dentro da altura do inimigo
+      const enemyH = e.boss ? 2.4 : (e.crouched ? ENEMY_HEIGHT_CROUCH : ENEMY_HEIGHT);
+      const shotH = shotHeightAt(eye, pitch, proj);
+      if (shotH > enemyH || shotH < 0) continue;
       best = e; bestDist = proj;
-      bestHead = perp < PLAYER_RADIUS * 0.42;
+      bestHead = shotH > enemyH * HEADSHOT_ZONE;
     }
     return { hit: best, dist: bestDist, head: bestHead, wallDist: wall.dist, wallHit: wall.hit };
   }

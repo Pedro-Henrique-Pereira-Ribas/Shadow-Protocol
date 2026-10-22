@@ -344,5 +344,85 @@ console.log('\n=== CONTROLES TOUCH (mobile) ===');
   ok(tc.el.classList.contains('hidden'), 'controles touch podem ser ocultados');
 }
 
+console.log('\n=== MIRA VERTICAL E MOVIMENTO WASD ===');
+{
+  const { Input } = await import('../public/js/input.js');
+  const { LocalPlayer } = await import('../public/js/game.js');
+  const { getMap } = await import('../shared/mapdefs.js');
+  const { cellToWorld } = await import('../shared/maps.js');
+  const { PITCH_LIMIT } = await import('../shared/constants.js');
+
+  const map = getMap('st_aldeia');
+  const input = new Input(makeCanvas());
+  const p = new LocalPlayer(map, { loadout: ['pistola'] });
+  const sp = cellToWorld(map.spawns.T[0].x, map.spawns.T[0].y);
+  p.x = sp.x; p.y = sp.y;
+
+  // --- WASD ---
+  const game = { onStep() {}, onReloadEnd() {} };
+  const startX = p.x, startY = p.y;
+  p.angle = 0;                       // olhando para +x
+  input.keys.add('KeyW');
+  for (let i = 0; i < 30; i++) p.update(1 / 60, input, game);
+  ok(p.x > startX + 0.5, `W avanca para a frente (x ${startX.toFixed(1)} -> ${p.x.toFixed(1)})`);
+
+  const x2 = p.x;
+  input.keys.delete('KeyW'); input.keys.add('KeyS');
+  for (let i = 0; i < 30; i++) p.update(1 / 60, input, game);
+  ok(p.x < x2 - 0.5, `S recua (x ${x2.toFixed(1)} -> ${p.x.toFixed(1)})`);
+
+  input.keys.delete('KeyS'); input.keys.add('KeyA');
+  const y3 = p.y;
+  for (let i = 0; i < 30; i++) p.update(1 / 60, input, game);
+  ok(Math.abs(p.y - y3) > 0.5, `A move para o lado (y ${y3.toFixed(1)} -> ${p.y.toFixed(1)})`);
+
+  input.keys.delete('KeyA'); input.keys.add('KeyD');
+  const y4 = p.y;
+  for (let i = 0; i < 30; i++) p.update(1 / 60, input, game);
+  ok(Math.abs(p.y - y4) > 0.5, `D move para o outro lado (y ${y4.toFixed(1)} -> ${p.y.toFixed(1)})`);
+  input.keys.clear();
+
+  // --- mira vertical ---
+  input.mouseDY = -100;              // mouse para cima
+  p.update(1 / 60, input, game);
+  ok(p.pitch > 0.05, `mouse para cima inclina a mira para cima (pitch=${p.pitch.toFixed(3)})`);
+
+  const pitchUp = p.pitch;
+  input.mouseDY = 200;              // mouse para baixo
+  p.update(1 / 60, input, game);
+  ok(p.pitch < pitchUp, `mouse para baixo inclina a mira para baixo (pitch=${p.pitch.toFixed(3)})`);
+
+  // limite
+  for (let i = 0; i < 200; i++) { input.mouseDY = -500; p.update(1 / 60, input, game); }
+  ok(p.pitch <= PITCH_LIMIT + 0.001, `inclinacao limitada a ${PITCH_LIMIT} rad (${p.pitch.toFixed(3)})`);
+  for (let i = 0; i < 400; i++) { input.mouseDY = 500; p.update(1 / 60, input, game); }
+  ok(p.pitch >= -PITCH_LIMIT - 0.001, `inclinacao minima -${PITCH_LIMIT} rad (${p.pitch.toFixed(3)})`);
+
+  // --- tiro vertical: mirar acima da cabeca deve errar ---
+  const { Enemy } = await import('../public/js/ai.js');
+  const g2 = new (await import('../public/js/story.js')).StoryGame(map, 'm1', {});
+  const sp2 = cellToWorld(map.spawns.T[0].x, map.spawns.T[0].y);
+  g2.player.x = sp2.x; g2.player.y = sp2.y;
+  g2.player.angle = 0;
+  g2.player.pitch = 0;
+  const enemy = new Enemy(map, 'soldador', g2.player.x + 8, g2.player.y);
+  g2.enemies = [enemy];
+  const acertou = g2.traceShot(0);
+  ok(acertou.hit === enemy, 'mira horizontal acerta o inimigo em pe');
+  ok(!acertou.head, 'mira no corpo (sem headshot)');
+
+  // mirar muito acima: passa por cima da cabeca
+  g2.player.pitch = PITCH_LIMIT;
+  const acima = g2.traceShot(0);
+  ok(acima.hit === null, 'mira muito acima passa por cima do inimigo');
+
+  // mirar na cabeca (topo da altura do inimigo)
+  const { EYE_STAND: EYE } = await import('../shared/constants.js');
+  const cabecaPitch = Math.atan2((1.75 * 0.92 - EYE), 8);
+  g2.player.pitch = cabecaPitch;
+  const cabeca = g2.traceShot(0);
+  ok(cabeca.head === true, `mira na cabeca da headshot (pitch=${cabecaPitch.toFixed(4)})`);
+}
+
 console.log('\nCONCLUIDO\n');
 process.exit(0);

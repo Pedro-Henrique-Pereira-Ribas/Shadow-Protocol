@@ -265,7 +265,7 @@ export class OnlineGame extends Game {
       const wantFire = wpn.auto ? input.fireHeld : input.fireClicked;
       if (wantFire && p.canFire()) {
         p.consumeShot();
-        this.send({ t: 'shoot', a: p.angle });
+        this.send({ t: 'shoot', a: p.angle, p: p.pitch || 0 });
         this.addEffect({
           kind: 'tracer', x0: p.x, y0: p.y,
           x1: p.x + Math.cos(p.angle) * 500, y1: p.y + Math.sin(p.angle) * 500,
@@ -283,7 +283,7 @@ export class OnlineGame extends Game {
     const t = performance.now();
     if (t - this.lastSend > 33) {
       this.lastSend = t;
-      this.send({ t: 'pos', x: p.x, y: p.y, a: p.angle, cr: p.crouched, wk: p.walking, ping: 0 });
+      this.send({ t: 'pos', x: p.x, y: p.y, a: p.angle, p: p.pitch || 0, cr: p.crouched, wk: p.walking, ping: 0 });
     }
 
     this.updateCommon(dt);

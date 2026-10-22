@@ -157,6 +157,13 @@ function wireUI() {
   };
   $('#btnResume').onclick = () => togglePause(false);
   $('#btnQuit').onclick = quitToMenu;
+  $('#btnHudMenu').onclick = () => {
+    // volta ao menu principal (sai da sala online se estiver em uma)
+    if (currentGame && currentGame.mode === 'online') {
+      toast('Saindo da partida online...');
+    }
+    quitToMenu();
+  };
   $('#btnResMenu').onclick = quitToMenu;
   $('#btnResNext').onclick = () => {
     show($('#result'), false);

@@ -5,6 +5,7 @@ export class Input {
     this.keys = new Set();
     this.pressed = new Set();     // acoes de um unico frame (teclado)
     this.mouseDX = 0;
+    this.mouseDY = 0;
     this.mouseDown = false;
     this.mouseClicked = false;
     this.locked = false;
@@ -15,7 +16,8 @@ export class Input {
     // ---- toque (mobile) ----
     this.touch = {
       axis: { x: 0, y: 0 },   // joystick virtual
-      lookDX: 0,              // rotacao acumulada por arrasto
+      lookDX: 0,              // rotacao horizontal acumulada
+      lookDY: 0,              // inclinacao vertical acumulada
       fire: false,            // botao de tiro pressionado
       fireClicked: false,      // toque de tiro (1 frame)
       crouch: false,           // agachar (toggle)
@@ -27,7 +29,7 @@ export class Input {
 
   // ---------------- API de toque ----------------
   setTouchAxis(x, y) { this.touch.axis.x = x; this.touch.axis.y = y; }
-  addTouchLook(dx) { this.touch.lookDX += dx; }
+  addTouchLook(dx, dy = 0) { this.touch.lookDX += dx; this.touch.lookDY += dy; }
   setTouchFire(on) {
     if (on && !this.touch.fire) this.touch.fireClicked = true;
     this.touch.fire = on;
@@ -58,7 +60,7 @@ export class Input {
     document.addEventListener('mousemove', (e) => {
       if (!this.locked) return;
       this.mouseDX += e.movementX || 0;
-      this.mouseDY = (this.mouseDY || 0) + (e.movementY || 0);
+      this.mouseDY += e.movementY || 0;
     });
 
     this.canvas.addEventListener('mousedown', (e) => {
@@ -115,6 +117,12 @@ export class Input {
     this.mouseDX = 0;
     this.touch.lookDX = 0;
     return dx;
+  }
+  consumeMouseY() {
+    const dy = this.mouseDY + this.touch.lookDY;
+    this.mouseDY = 0;
+    this.touch.lookDY = 0;
+    return dy;
   }
   consumeWheel() {
     const w = this.wheel || 0;

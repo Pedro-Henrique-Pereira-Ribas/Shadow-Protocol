@@ -41,6 +41,7 @@ class FakeInput {
     this.mouseDown = false;
     this.mouseClicked = false;
     this.mx = 0;
+    this.my = 0;
     this.ax = 0; this.ay = 0;
     this.touch = { axis: { x: 0, y: 0 }, lookDX: 0, fire: false, fireClicked: false, crouch: false, pressed: new Set() };
   }
@@ -50,6 +51,7 @@ class FakeInput {
   hit(c) { const v = this.pressed.has(c); this.pressed.delete(c); return v; }
   axis() { return { x: this.ax, y: this.ay }; }
   consumeMouse() { const d = this.mx; this.mx = 0; return d; }
+  consumeMouseY() { const d = this.my; this.my = 0; return d; }
   consumeWheel() { return 0; }
   endFrame() { this.pressed.clear(); this.mouseClicked = false; }
 }
@@ -145,6 +147,10 @@ for (const mission of STORY_MISSIONS) {
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
       p.angle += diff * 0.4;
+      // mira no centro do corpo do inimigo (altura correta)
+      const enemyH = best.boss ? 2.4 : (best.crouched ? 1.0 : 1.75);
+      const wantPitch = Math.atan2((enemyH * 0.55 - 1.5), Math.max(1, bestD));
+      p.pitch += (wantPitch - p.pitch) * 0.4;
       // so atira com linha de visao livre
       visible = hasLineOfSight(map, p.x, p.y, best.x, best.y, true);
       // avanca se longe, recua se colado (eixo local: ay negativo = frente)

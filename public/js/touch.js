@@ -100,8 +100,9 @@ export class TouchControls {
     const lookMove = (e) => {
       if (this.lookPointer !== e.pointerId) return;
       const dx = e.clientX - this.lookLast.x;
+      const dy = e.clientY - this.lookLast.y;
       this.lookLast = { x: e.clientX, y: e.clientY };
-      this.input.addTouchLook(dx * this.input.sensitivity * 2.4);
+      this.input.addTouchLook(dx * this.input.sensitivity * 2.4, dy * 0.0013 * 2.4);
       e.preventDefault();
     };
     const lookEnd = (e) => {

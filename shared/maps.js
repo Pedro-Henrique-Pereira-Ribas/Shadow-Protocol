@@ -2,7 +2,6 @@
 // Servidor e cliente importam este modulo para garantir mapas identicos.
 
 import { CELL, WALL_FULL, WALL_LOW, EYE_STAND, EYE_CROUCH } from './constants.js';
-
 export const TILE = { FLOOR: 0, WALL: 1, LOW: 2 };
 export const TILE_HEIGHT = [0, WALL_FULL, WALL_LOW];
 
@@ -276,6 +275,46 @@ export function hasLineOfSight(map, x1, y1, x2, y2, lowBlocks = true) {
   if (len < 1) return true;
   const hit = raycast(map, x1, y1, dx / len, dy / len, len, lowBlocks);
   return !hit.hit || hit.dist >= len - 2;
+}
+
+// ---------------- Raycast com altura (mira vertical) ----------------
+// O tiro viaja na altura eyeH e inclina com o pitch: em cada celula,
+// a altura do tiro na distancia decide se a parede bloqueia.
+export function raycast3D(map, ox, oy, dirX, dirY, maxDist = 3000, eyeH = 1.6, pitch = 0) {
+  const tanP = Math.tan(pitch);
+  let cx = Math.floor(ox / CELL), cy = Math.floor(oy / CELL);
+  const deltaX = dirX === 0 ? 1e30 : Math.abs(CELL / dirX);
+  const deltaY = dirY === 0 ? 1e30 : Math.abs(CELL / dirY);
+  let stepX, stepY, sideDistX, sideDistY;
+  if (dirX < 0) { stepX = -1; sideDistX = (ox - cx * CELL) * deltaX; }
+  else { stepX = 1; sideDistX = ((cx + 1) * CELL - ox) * deltaX; }
+  if (dirY < 0) { stepY = -1; sideDistY = (oy - cy * CELL) * deltaY; }
+  else { stepY = 1; sideDistY = ((cy + 1) * CELL - oy) * deltaY; }
+
+  let side = 0, dist = 0;
+  for (let i = 0; i < 512; i++) {
+    if (sideDistX < sideDistY) { dist = sideDistX; sideDistX += deltaX; cx += stepX; side = 0; }
+    else { dist = sideDistY; sideDistY += deltaY; cy += stepY; side = 1; }
+    if (dist > maxDist) break;
+    const t = tileAt(map, cx, cy);
+    if (t === TILE.WALL) {
+      return { hit: true, dist, tile: t, cx, cy, side };
+    }
+    if (t === TILE.LOW) {
+      // parede baixa: bloqueia somente se o tiro passa abaixo do topo
+      const shotH = eyeH + dist * tanP;
+      if (shotH <= WALL_LOW) {
+        return { hit: true, dist, tile: t, cx, cy, side };
+      }
+      // caso contrario o tiro passa por cima e continua
+    }
+  }
+  return { hit: false, dist: maxDist, tile: TILE.FLOOR, cx, cy, side };
+}
+
+// Altura do tiro a uma distancia dada (olho + inclinacao)
+export function shotHeightAt(eyeH, pitch, dist) {
+  return eyeH + dist * Math.tan(pitch);
 }
 
 // Altura do olho -> define se parede baixa bloqueia o tiro

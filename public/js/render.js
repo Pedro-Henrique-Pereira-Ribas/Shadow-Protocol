@@ -195,7 +195,9 @@ export class Renderer {
     const eye = p.crouched ? EYE_CROUCH : EYE_STAND;
     const dirX = Math.cos(p.angle), dirY = Math.sin(p.angle);
     const planeX = -dirY * FOV_PLANE, planeY = dirX * FOV_PLANE;
-    const horizon = h / 2;
+    // horizonte desloca conforme a inclinacao da mira (olhar para cima desce o horizonte)
+    const pitch = p.pitch || 0;
+    const horizon = h / 2 + this.focal * Math.tan(pitch);
     const scene = SCENES[this.theme] || SCENES.dark;
 
     // fundo: teto e chao

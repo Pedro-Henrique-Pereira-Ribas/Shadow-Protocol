@@ -43,7 +43,7 @@ na tela — **não precisa instalar nada**:
 | Controle | Ação |
 |---|---|
 | Joystick virtual (canto inferior esquerdo) | Mover (o knob aparece onde você tocar) |
-| Arrastar na metade direita da tela | Olhar (girar a câmera) |
+| Arrastar na metade direita da tela | Olhar — **horizontal e vertical** |
 | Botão **FOGO** | Atirar (segure para tiro automático) |
 | Botão **RECARGA** | Recarregar |
 | Botão **AGACHAR** | Alternar agachamento |
@@ -62,16 +62,27 @@ de renderização é reduzida automaticamente para manter o FPS.
 
 | Tecla | Ação |
 |---|---|
-| `W` `A` `S` `D` | Mover |
-| Mouse | Mirar (o clique captura o cursor) |
+| `W` `A` `S` `D` | Mover (frente / esquerda / trás / direita) |
+| Mouse | Mirar — **horizontal e vertical** (inclinação limitada a ±22°) |
 | Clique esquerdo | Atirar (automático em SMG/fuzis/metralhadora) |
 | `R` | Recarregar |
-| `Ctrl` / `C` | Agachar (agachado = protege de cobertura baixa) |
+| `Ctrl` / `C` | Agachar (agachado = protegido de cobertura baixa) |
 | `Shift` | Andar devagar (mais preciso) |
 | `1` `2` `3` `4` | Trocar arma |
 | `Q` / roda do mouse | Trocar arma |
 | `B` | Loja (modo Online) |
 | `Esc` | Pausar |
+| Botão **MENU** (canto superior direito) | Voltar ao menu principal |
+
+### Mira vertical
+
+A mira inclina para cima e para baixo de verdade, com física:
+
+- o horizonte da cena desliza junto com a mira;
+- **mirar de leve para cima** na cabeça do inimigo = **headshot** (4× dano);
+- **mirar muito para cima** o tiro passa por cima da cabeça e erra;
+- **mirar para baixo** faz o tiro bater na cobertura baixa (a cobertura de 1,15 m só deixa passar o tiro quando você está em pé);
+- a IA também mira na vertical: mira no centro do seu corpo, então **agachar** reduz muito a chance de headshot.
 
 ---
 

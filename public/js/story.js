@@ -127,7 +127,8 @@ export class StoryGame extends Game {
     const pellets = wpn.pellets || 1;
     for (let i = 0; i < pellets; i++) {
       const a = p.angle + rand(spreadBase, -spreadBase) * 1.6;
-      const res = this.traceShot(a);
+      const pj = (p.pitch || 0) + rand(spreadBase, -spreadBase) * 0.45;
+      const res = this.traceShot(a, 1, pj);
       this.addEffect({
         kind: 'tracer', x0: p.x, y0: p.y,
         x1: p.x + Math.cos(a) * res.dist, y1: p.y + Math.sin(a) * res.dist,

@@ -3,10 +3,13 @@ import { randomBytes } from 'node:crypto';
 import {
   CELL, PLAYER_RADIUS, RUN_SPEED, MAX_HEALTH, MAX_ARMOR, MAX_MONEY, HEADSHOT_MULT,
   WEAPONS, EQUIP, MODES, TICK_RATE, SNAPSHOT_RATE, WEAPON_ORDER,
+  EYE_STAND, EYE_CROUCH, PITCH_LIMIT, HEADSHOT_ZONE,
 } from '../shared/constants.js';
 import { getMap } from '../shared/mapdefs.js';
-import { collides, moveCircle, raycast, TILE, lowBlocksFor, randomFloorPoints } from '../shared/maps.js';
+import { collides, moveCircle, raycast, raycast3D, TILE, lowBlocksFor, randomFloorPoints } from '../shared/maps.js';
 import { addMatchResult } from './db.js';
+
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
 const BUY_TIME = 15000;
 const ROUND_TIME = 115000;
@@ -401,12 +404,13 @@ function handleShoot(room, p, msg) {
   p.ammo[p.weapon]--;
 
   const ang = Number(msg.a) || p.angle;
+  const pitch = clamp(Number(msg.p) || 0, -PITCH_LIMIT, PITCH_LIMIT);
   const dirX = Math.cos(ang), dirY = Math.sin(ang);
   const crouched = !!p.crouched;
-  const lowBlocks = lowBlocksFor(crouched);
+  const eyeH = crouched ? EYE_CROUCH : EYE_STAND;
 
-  // parede
-  const wall = raycast(room.map, p.x, p.y, dirX, dirY, wpn.range, lowBlocks);
+  // parede (considera a altura do tiro)
+  const wall = raycast3D(room.map, p.x, p.y, dirX, dirY, wpn.range, eyeH, pitch);
   let maxDist = wall.hit ? wall.dist : wpn.range;
 
   // jogador mais proximo no caminho
@@ -428,8 +432,9 @@ function handleShoot(room, p, msg) {
   for (let i = 0; i < pellets; i++) {
     const spread = (wpn.spread || 0) * (p.walking ? 1.6 : p.crouched ? 0.65 : 1);
     const a2 = ang + (Math.random() - 0.5) * 2 * spread * 3;
+    const p2 = pitch + (Math.random() - 0.5) * 2 * spread * 0.45;
     const dx = Math.cos(a2), dy = Math.sin(a2);
-    const w = raycast(room.map, p.x, p.y, dx, dy, wpn.range, lowBlocks);
+    const w = raycast3D(room.map, p.x, p.y, dx, dy, wpn.range, eyeH, p2);
     let dist = w.hit ? w.dist : wpn.range;
     let hitPlayer = null, head = false;
     for (const other of room.players.values()) {
@@ -440,8 +445,12 @@ function handleShoot(room, p, msg) {
       if (proj <= 0 || proj > dist) continue;
       const perp = Math.abs(vx * dy - vy * dx);
       if (perp > PLAYER_RADIUS + 0.3) continue;
+      // altura: o tiro precisa passar dentro da altura do alvo
+      const oH = other.crouched ? 1.0 : 1.75;
+      const hAt = eyeH + proj * Math.tan(p2);
+      if (hAt > oH || hAt < 0) continue;
       hitPlayer = other; dist = proj;
-      head = Math.random() < (other.crouched ? 0.24 : 0.09);
+      head = hAt > oH * HEADSHOT_ZONE;
     }
     if (hitPlayer) {
       let dmg = wpn.dmg * (head ? HEADSHOT_MULT : 1);
@@ -480,6 +489,7 @@ function handlePos(room, p, msg) {
   const moved = moveCircle(room.map, p.x, p.y, tx - p.x, ty - p.y, PLAYER_RADIUS);
   p.x = moved.x; p.y = moved.y;
   p.angle = Number(msg.a) || p.angle;
+  p.pitch = clamp(Number(msg.p) || 0, -PITCH_LIMIT, PITCH_LIMIT);
   p.crouched = !!msg.cr;
   p.walking = !!msg.wk;
   if (Number.isFinite(msg.ping)) p.ping = msg.ping;

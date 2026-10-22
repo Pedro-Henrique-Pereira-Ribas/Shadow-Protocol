@@ -2,8 +2,9 @@
 import {
   CELL, PLAYER_RADIUS, MAX_HEALTH, WEAPONS, EYE_STAND,
 } from '/shared/constants.js';
-import { moveCircle, raycast, hasLineOfSight, lowBlocksFor, flowStep, cellCenter, worldToCell } from '/shared/maps.js';
+import { moveCircle, raycast, raycast3D, hasLineOfSight, lowBlocksFor, flowStep, cellCenter, worldToCell } from '/shared/maps.js';
 import { ENEMY_TYPES } from '/shared/story.js';
+import { HEADSHOT_ZONE } from '/shared/constants.js';
 import { clamp, rand, angDiff } from './util.js';
 
 const PATROL_RADIUS = 12;    // metros
@@ -211,26 +212,37 @@ export class Enemy {
     const shotAngle = aim + rand(err, -err);
 
     const dirX = Math.cos(shotAngle), dirY = Math.sin(shotAngle);
-    const wall = raycast(this.map, this.x, this.y, dirX, dirY, wpn.range, lowBlocksFor(this.crouched));
+    // mira vertical: mira no centro do jogador (com erro vertical)
+    const targetH = p.crouched ? 1.0 : 1.75;
+    const shotH = targetH * 0.5 + rand(err * 0.9, -err * 0.9);
+    const pitch = Math.atan2(shotH - 1.6, Math.max(1, dist));
+    const wall = raycast3D(this.map, this.x, this.y, dirX, dirY, wpn.range, 1.6, pitch);
     const maxDist = wall.hit ? wall.dist : wpn.range;
 
     // acerta o jogador?
     const vx = p.x - this.x, vy = p.y - this.y;
     const proj = vx * dirX + vy * dirY;
     const perp = Math.abs(vx * dirY - vy * dirX);
-    const hitPlayer = proj > 0 && proj <= maxDist && perp <= PLAYER_RADIUS + 4;
+    let hitPlayer = proj > 0 && proj <= maxDist && perp <= PLAYER_RADIUS + 0.35;
+    let headshot = false;
+    if (hitPlayer) {
+      const h = p.crouched ? 1.0 : 1.75;
+      const hAt = 1.6 + proj * Math.tan(pitch);
+      if (hAt > h || hAt < 0) hitPlayer = false;
+      else headshot = hAt > h * HEADSHOT_ZONE;
+    }
 
     game.onEnemyShot?.(this, shotAngle, maxDist, hitPlayer);
 
     if (hitPlayer) {
-      let dmg = this.type.damage * rand(1.25, 0.75);
+      let dmg = this.type.damage * rand(1.25, 0.75) * (headshot ? 2.5 : 1);
       if (p.armor > 0) {
         const absorbed = dmg * 0.5;
         p.armor = Math.max(0, p.armor - absorbed);
         dmg -= absorbed;
       }
       p.hp -= dmg;
-      game.onPlayerDamage?.(dmg, this);
+      game.onPlayerDamage?.(dmg, this, headshot);
       if (p.hp <= 0) game.onPlayerDeath?.(this);
     }
   }
