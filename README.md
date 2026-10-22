@@ -151,7 +151,8 @@ quando em pé e protege quando agachado, neblina por distância e iluminação d
 **Para a parede ser fácil de localizar:**
 - **1 coluna por pixel** (no desktop) — cada pixel amostra o ponto exato do mundo,
   sem borrão e sem a textura "escorregar" ao andar (`pixelStep = 2` no celular, por performance);
-- **texturas de 128×128** com topo claro e base escura, dando silhueta definida;
+- **texturas de 128×128** de baixa frequência (sem ruído por pixel) + **cadeia de mipmaps**
+  (4 níveis) — paredes distantes usam a versão borrada, eliminando o chuvisco ao andar;
 - **linhas de profundidade no chão** (a cada 2 m, em perspectiva) — dão a referência
   de movimento e distância que faz a parede "parar de escorregar" na tela;
 - **sombra de contato** na base de cada parede, ancorando-a no chão;

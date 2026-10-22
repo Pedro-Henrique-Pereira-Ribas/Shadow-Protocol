@@ -2,8 +2,7 @@
 import { Game } from './game.js';
 import {
   WEAPONS, EQUIP, MODES, MAX_HEALTH, MAX_ARMOR, MAX_MONEY, CELL, INTERP_DELAY, PROTOCOL,
-} from '/shared/constants.js';
-import { TILE, tileAt } from '/shared/maps.js';
+} from '/shared/constants.js';import { TILE, tileAt } from '/shared/maps.js';
 import { clamp, lerp, angDiff, fmtTime } from './util.js';
 
 export class OnlineGame extends Game {
@@ -56,6 +55,13 @@ export class OnlineGame extends Game {
           this.scores = msg.scores || { T: 0, CT: 0 };
           this.money = msg.me?.money ?? 800;
           this.player.team = msg.me?.team || 'CT';
+          // posicao inicial provisoria (o servidor manda a definitiva em 'spawn')
+          const sp = (this.map.spawns[this.player.team] || this.map.spawns.T || [])[0];
+          if (sp) {
+            this.player.x = sp.x * CELL + CELL / 2;
+            this.player.y = sp.y * CELL + CELL / 2;
+            this.reconciled = { x: this.player.x, y: this.player.y, init: true };
+          }
           this.connected = true;
           for (const p of msg.players || []) {
             if (p.id === this.myId) continue;
@@ -145,10 +151,22 @@ export class OnlineGame extends Game {
         if (msg.v?.id === this.myId) { this.player.alive = false; this.onDeath?.(); }
         break;
       }
+      case 'spawn': {
+        // servidor informou onde o jogador nasceu
+        this.player.x = msg.x;
+        this.player.y = msg.y;
+        this.player.angle = msg.a ?? this.player.angle;
+        this.player.hp = msg.hp ?? this.player.hp;
+        this.player.alive = true;
+        this.player.vx = 0; this.player.vy = 0;
+        this.reconciled = { x: msg.x, y: msg.y, init: true };
+        break;
+      }
       case 'respawn': {
         this.player.alive = true;
         this.player.hp = msg.hp;
         this.player.x = msg.x; this.player.y = msg.y;
+        this.player.vx = 0; this.player.vy = 0;
         this.reconciled = { x: msg.x, y: msg.y, init: true };
         break;
       }
@@ -279,9 +297,9 @@ export class OnlineGame extends Game {
     // interpolar remotos
     this.interpolateRemotes();
 
-    // envio de posicao
+    // envio de posicao (so depois de ser posicionado pelo servidor)
     const t = performance.now();
-    if (t - this.lastSend > 33) {
+    if (t - this.lastSend > 33 && this.reconciled.init) {
       this.lastSend = t;
       this.send({ t: 'pos', x: p.x, y: p.y, a: p.angle, p: p.pitch || 0, cr: p.crouched, wk: p.walking, ping: 0 });
     }

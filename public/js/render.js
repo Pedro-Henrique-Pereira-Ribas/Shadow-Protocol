@@ -5,6 +5,7 @@ import { TILE, TILE_HEIGHT, tileAt } from '/shared/maps.js';
 const TEX_SIZE = 128;
 const FOV_PLANE = 0.72;      // meio-angulo da projecao
 const SHADES = 7;
+const MIPS = 4;             // niveis de mipmap (nitido -> borrado)
 
 // ---------------- Texturas procedurais ----------------
 function mulberry(seed) {
@@ -28,24 +29,28 @@ function makeWallTexture(seed, base, accent) {
 
   // borda superior clara: da um topo definido a silhueta da parede
   g.fillStyle = 'rgba(255,255,255,.16)';
-  g.fillRect(0, 0, TEX_SIZE, 4);
+  g.fillRect(0, 0, TEX_SIZE, 5);
   // base escura: ancora a parede no chao
-  g.fillStyle = 'rgba(0,0,0,.35)';
-  g.fillRect(0, TEX_SIZE - 5, TEX_SIZE, 5);
+  g.fillStyle = 'rgba(0,0,0,.38)';
+  g.fillRect(0, TEX_SIZE - 6, TEX_SIZE, 6);
 
-  // ruido
-  const img = g.getImageData(0, 0, TEX_SIZE, TEX_SIZE);
-  const d = img.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const n = (r() - 0.5) * 26;
-    d[i] += n; d[i + 1] += n * 1.1; d[i + 2] += n * 0.8;
+  // manchas SUAVES (baixa frequencia) - ruido por pixel causaria
+  // "chuvisco" quando a parede se move
+  for (let i = 0; i < 26; i++) {
+    const x = r() * TEX_SIZE, y = r() * TEX_SIZE;
+    const rad = 14 + r() * 46;
+    const grad = g.createRadialGradient(x, y, 0, x, y, rad);
+    const dark = r() > 0.45;
+    grad.addColorStop(0, dark ? 'rgba(0,0,0,.16)' : 'rgba(255,255,255,.07)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grad;
+    g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
   }
-  g.putImageData(img, 0, 0);
 
   // painel: faixas horizontais e verticais (proporcional ao tamanho)
   g.strokeStyle = accent;
-  g.globalAlpha = 0.55;
-  g.lineWidth = 2;
+  g.globalAlpha = 0.6;
+  g.lineWidth = 3;
   for (let y = 0; y < TEX_SIZE; y += TEX_SIZE / 4) {
     g.beginPath(); g.moveTo(0, y + 0.5); g.lineTo(TEX_SIZE, y + 0.5); g.stroke();
   }
@@ -54,12 +59,12 @@ function makeWallTexture(seed, base, accent) {
   }
   g.globalAlpha = 1;
 
-  // manchas
-  g.globalAlpha = 0.14;
-  g.fillStyle = '#000';
-  for (let i = 0; i < TEX_SIZE / 6; i++) {
-    const w = 4 + r() * 18, h = 3 + r() * 12;
-    g.fillRect(r() * TEX_SIZE, r() * TEX_SIZE, w, h);
+  // blocos de concreto (baixa frequencia)
+  g.globalAlpha = 0.12;
+  for (let i = 0; i < TEX_SIZE / 12; i++) {
+    g.fillStyle = r() > 0.5 ? '#000' : '#9fd8b4';
+    const bw = TEX_SIZE / 8, bh = TEX_SIZE / 16;
+    g.fillRect(Math.floor(r() * (TEX_SIZE / bw)) * bw, Math.floor(r() * (TEX_SIZE / bh)) * bh, bw, bh);
   }
   g.globalAlpha = 1;
   return cv;
@@ -86,11 +91,12 @@ function makeCrateTexture(seed) {
   g.strokeRect(3, 3, TEX_SIZE - 6, TEX_SIZE - 6);
   g.beginPath(); g.moveTo(4, 4); g.lineTo(TEX_SIZE - 4, TEX_SIZE - 4); g.stroke();
   g.beginPath(); g.moveTo(TEX_SIZE - 4, 4); g.lineTo(4, TEX_SIZE - 4); g.stroke();
-  // granulado
-  g.globalAlpha = 0.2;
-  for (let i = 0; i < TEX_SIZE * 1.5; i++) {
+  // granulado grosso (baixa frequencia)
+  g.globalAlpha = 0.18;
+  for (let i = 0; i < TEX_SIZE / 8; i++) {
     g.fillStyle = r() > 0.5 ? '#000' : '#7a6a52';
-    g.fillRect(r() * TEX_SIZE, r() * TEX_SIZE, 2, 2);
+    const s = 6 + r() * 14;
+    g.fillRect(r() * TEX_SIZE, r() * TEX_SIZE, s, s);
   }
   g.globalAlpha = 1;
   return cv;
@@ -169,11 +175,28 @@ export class Renderer {
     const crate = makeCrateTexture(29);
     const metal = makeWallTexture(47, '#33403a', '#0c1210');
     const light = SCENES[this.theme]?.light;
-    this.textures = {
-      [TILE.WALL]: Array.from({ length: SHADES }, (_, i) => shadeCanvas(wall, i, light)),
-      [TILE.LOW]: Array.from({ length: SHADES }, (_, i) => shadeCanvas(crate, i, light)),
-      [TILE.FLOOR]: Array.from({ length: SHADES }, (_, i) => shadeCanvas(metal, i, light)),
-    };
+    const src = { [TILE.WALL]: wall, [TILE.LOW]: crate, [TILE.FLOOR]: metal };
+
+    this.textures = {};
+    for (const key of Object.keys(src)) {
+      // cadeia de mipmaps: nivel 0 = nitido, 3 = bem suavizado.
+      // Paredes distantes usam versoes borradas -> sem chuvisco ao andar.
+      const mips = [src[key]];
+      let cur = src[key];
+      for (let i = 1; i < MIPS; i++) {
+        const s = Math.max(8, TEX_SIZE >> i);
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = s;
+        const g = cv.getContext('2d');
+        g.imageSmoothingEnabled = true;
+        g.imageSmoothingQuality = 'high';
+        g.drawImage(cur, 0, 0, s, s);
+        mips.push(cv);
+        cur = cv;
+      }
+      this.textures[key] = Array.from({ length: SHADES }, (_, i) =>
+        mips.map((mip) => shadeCanvas(mip, i, light)));
+    }
   }
 
   // Alterna entre os temas claro e escuro
@@ -298,10 +321,14 @@ export class Renderer {
       let lvl = Math.floor((1 - fog) * (SHADES - 1));
       if (side === 1) lvl = Math.max(0, lvl - 1);
       const texArr = this.textures[tile] || this.textures[TILE.WALL];
-      const tex = texArr[Math.max(0, Math.min(SHADES - 1, lvl))];
+      const shadeIdx = Math.max(0, Math.min(SHADES - 1, lvl));
 
-      const texU = Math.floor(wallX * TEX_SIZE);
-      ctx.drawImage(tex, texU, 0, 1, TEX_SIZE, i * colW, drawStart, colW + 0.6, dh);
+      // mipmap: quanto mais longe, mais borrado (evita chuvisco/piscada)
+      const mipIdx = Math.max(0, Math.min(MIPS - 1, Math.floor(Math.log2(Math.max(1, dist / 2.2)))));
+      const tex = texArr[shadeIdx][mipIdx];
+
+      const texU = Math.floor(wallX * tex.width);
+      ctx.drawImage(tex, texU, 0, 1, tex.height, i * colW, drawStart, colW + 0.6, dh);
 
       // sombra de contato na base da parede: deixa o limite com o chao nitido
       const baseY = drawEnd;

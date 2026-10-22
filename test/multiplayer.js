@@ -37,6 +37,7 @@ function connect(name) {
   ws.on('message', (raw) => {
     const m = JSON.parse(raw.toString());
     if (m.t === 'joined') { st.id = m.you; st.joined = true; }
+    if (m.t === 'spawn') { st.spawned = true; st.spawn = { x: m.x, y: m.y }; }
     if (m.t === 'snap') {
       st.snaps++;
       const me = m.p.find((x) => x.id === st.id);
@@ -55,6 +56,14 @@ await new Promise((r2) => setTimeout(r2, 3500));
 ok(A.joined && B.joined, `ambos conectados (A=${A.id?.slice(0, 6)} B=${B.id?.slice(0, 6)})`);
 ok(A.snaps > 0 && B.snaps > 0, `snapshots recebidos (A=${A.snaps} B=${B.snaps})`);
 ok(!!A.pos && !!B.pos, `posicoes: A=${JSON.stringify(A.pos)} B=${JSON.stringify(B.pos)}`);
+
+// o jogador NAO pode ficar em (0,0) - isso trava o movimento (dentro de parede)
+for (const [n, st] of [['A', A], ['B', B]]) {
+  const bad = !st.pos || (Math.abs(st.pos.x) < 0.01 && Math.abs(st.pos.y) < 0.01);
+  ok(!bad, `jogador ${n} foi posicionado no mapa (nao em 0,0)`);
+}
+// o servidor deve ter enviado o spawn
+ok(A.spawned, 'servidor enviou a posicao de spawn (mensagem "spawn")');
 
 if (A.pos && B.pos) {
   const dist0 = Math.hypot(A.pos.x - B.pos.x, A.pos.y - B.pos.y);

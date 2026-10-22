@@ -130,6 +130,11 @@ export function destroyRoom(code) {
 export function addPlayerToRoom(room, player) {
   room.players.set(player.id, player);
   balanceTeams(room);
+  // se a partida ja comecou, coloca o novo jogador no mapa imediatamente
+  if (room.phase === 'live' || room.phase === 'buy') {
+    spawnPlayer(room, player);
+    sendTo(room, player.id, { t: 'spawn', x: player.x, y: player.y, a: player.angle, hp: player.hp });
+  }
 }
 
 export function removePlayerFromRoom(room, playerId) {
@@ -346,6 +351,8 @@ function startRound(room) {
     p.alive = true;
     p.grenades = Math.min(p.grenades, 1);
     spawnPlayer(room, p);
+    // informa o jogador onde ele nasceu (sem isso ele ficaria em 0,0)
+    sendTo(room, p.id, { t: 'spawn', x: p.x, y: p.y, a: p.angle, hp: p.hp });
   }
 
   if (mode.respawn) {
@@ -482,8 +489,16 @@ function handlePos(room, p, msg) {
   const d = Math.hypot(dx, dy);
   const maxStep = RUN_SPEED * dt * 2.2 + 1.2;
   let tx = p.x, ty = p.y;
-  if (d <= maxStep) { tx = nx; ty = ny; }
-  else { const k = maxStep / (d || 1); tx = p.x + dx * k; ty = p.y + dy * k; }
+  if (d <= maxStep) {
+    tx = nx; ty = ny;
+  } else if (d <= maxStep * 3) {
+    // excesso pequeno: limita o passo
+    const k = maxStep / (d || 1);
+    tx = p.x + dx * k; ty = p.y + dy * k;
+  } else {
+    // salto grande (teleporte ou posicao invalida): ignora
+    return;
+  }
 
   // resolve colisao no servidor
   const moved = moveCircle(room.map, p.x, p.y, tx - p.x, ty - p.y, PLAYER_RADIUS);
